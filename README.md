@@ -1,0 +1,53 @@
+# Royal Chess (Local 2-Player)
+
+A browser chess project built with plain HTML, CSS, and JavaScript.
+
+## Student Project Note
+
+This is a humble student project made for learning and experimentation.  
+It is intentionally ambitious in style and features, and still evolving.
+
+If something feels rough, that is expected and part of the learning process.
+
+## Current Features
+
+- Local 2-player chess on one device
+- Core chess rules including castling, en passant, and promotion
+- Check, checkmate, stalemate, and timeout handling
+- Move highlighting, last-move tracking, undo, and move history
+- Multiple themes and fantasy-style visual effects
+- Web Audio based reactive sound system
+- Evaluation bar with tactical signals (including mate-in-1 warnings)
+- Progression layer with XP, level, achievements, and quests
+
+## Run Locally
+
+Open `index.html` in a modern browser.
+
+## Project Structure
+
+- `index.html` - main page shell
+- `styles/main.css` - all visual styling
+- `js/chess-engine.js` - chess rules and move legality
+- `js/ui.js` - interaction and rendering layer
+- `js/evaluation.js` - scoring and evaluation logic
+- `js/tactical-eval.js` - tactical signal helpers
+- `js/sound.js` - Web Audio synthesis and DSP
+- `js/systems/progression-system.js` - persistent meta progression
+- `docs/ARCHITECTURE.md` - project architecture direction
+- `docs/EPIC_GAME_ROADMAP.md` - long-term expansion roadmap
+
+## Roadmap Context
+
+This repository is being prepared as the base for a bigger "epic fantasy chess" game.  
+The current target is to keep the code understandable, modular, and easy to extend.
+
+## Known Limitations
+
+- No online multiplayer yet
+- Evaluation is lightweight, not full-engine strength
+- UI/UX still being iterated as features grow
+
+## Credits
+
+Designed and developed as a student learning project.
