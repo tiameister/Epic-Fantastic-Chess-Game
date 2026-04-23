@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node ./js/tests/engine-tests.js"
+    "test": "node ./js/tests/engine-tests.js && node ./js/tests/ui-state-tests.js"
   }
 }

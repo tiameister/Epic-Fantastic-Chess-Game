@@ -1,5 +1,6 @@
 import { ChessEngine } from "../chess-engine.js";
 import { STATE } from "../constants.js";
+import { evaluatePosition } from "../evaluation.js";
 
 function assert(condition, message) {
   if (!condition) {
@@ -119,6 +120,13 @@ function testFiftyMoveRule() {
   assert(engine.drawReason === "50-move rule", "Expected 50-move rule reason");
 }
 
+function testEvaluationDeterminism() {
+  const engine = new ChessEngine();
+  const a = evaluatePosition(engine);
+  const b = evaluatePosition(engine);
+  assert(a === b, "Evaluation should be deterministic on unchanged position");
+}
+
 function run() {
   testPerft();
   testCastlingThroughCheckDisallowed();
@@ -127,6 +135,7 @@ function run() {
   testInsufficientMaterialDraw();
   testThreefoldRepetition();
   testFiftyMoveRule();
+  testEvaluationDeterminism();
   console.log("All engine tests passed.");
 }
 

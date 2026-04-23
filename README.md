@@ -32,7 +32,7 @@ Open `index.html` in a modern browser.
 
 Run deterministic engine regression checks:
 
-- `node ./js/tests/engine-tests.js`
+- `npm test`
 
 ## Keyboard Shortcuts
 
@@ -58,6 +58,7 @@ Run deterministic engine regression checks:
 - `js/state/store.js` - central layered state store/reducers
 - `js/sound.js` - Web Audio synthesis and DSP
 - `js/tests/engine-tests.js` - perft-style and critical position tests
+- `js/tests/ui-state-tests.js` - UI store transition regression tests
 - `js/systems/progression-system.js` - persistent meta progression
 - `docs/ARCHITECTURE.md` - project architecture direction
 - `docs/EPIC_GAME_ROADMAP.md` - long-term expansion roadmap
