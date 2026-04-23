@@ -29,6 +29,7 @@ export class ChessUI {
     this.squareElements = new Map();
     this.matchRecorded = false;
     this.matchStats = this.createEmptyMatchStats();
+    this.lastEvalSnapshot = { score: 0, label: "" };
   }
 
   init() {
@@ -294,15 +295,16 @@ export class ChessUI {
     this.elements.moveQualityLabel.textContent = this.currentMoveQuality;
     this.elements.moveQualityLabel.className = "quality-label";
     this.elements.moveQualityLabel.classList.add(this.currentMoveQuality.toLowerCase().replace(/\s+/g, "-"));
+    this.lastEvalSnapshot = this.getEvaluationSnapshot();
     this.renderProfile();
     this.renderMetaProgress();
     this.renderHistory();
     this.renderTimers();
-    this.renderEvaluation();
+    this.renderEvaluation(this.lastEvalSnapshot);
     this.renderBoard();
     this.updateGameOverPanel();
     this.updateCriticalAtmosphere();
-    this.sound.updateMood(this.getEvaluationSnapshot().score, this.engine.turn);
+    this.sound.updateMood(this.lastEvalSnapshot.score, this.engine.turn);
   }
 
   applyPreset(presetId) {
@@ -444,11 +446,11 @@ export class ChessUI {
     this.elements.gameOverPanel.classList.toggle("hidden", !show);
   }
 
-  renderEvaluation() {
+  renderEvaluation(snapshot = null) {
     if (!this.isEvalVisible) {
       return;
     }
-    const evaluation = this.getEvaluationSnapshot();
+    const evaluation = snapshot || this.getEvaluationSnapshot();
     const percent = scoreToBarPercent(evaluation.score);
     if (window.innerWidth <= 760) {
       this.elements.evalFill.style.width = `${percent}%`;

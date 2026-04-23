@@ -36,6 +36,7 @@ Open `index.html` in a modern browser.
 - `js/systems/progression-system.js` - persistent meta progression
 - `docs/ARCHITECTURE.md` - project architecture direction
 - `docs/EPIC_GAME_ROADMAP.md` - long-term expansion roadmap
+- `docs/PRODUCT_SCOPE.md` - v1 scope freeze and boundaries
 
 ## Roadmap Context
 
