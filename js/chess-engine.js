@@ -492,7 +492,14 @@ export class ChessEngine {
     this.turn = this.opposite(this.turn);
     this.recordPosition();
     this.evaluateGameState();
-    this.pushMoveHistory(movingPiece, from, to, { ...chosen, promotionType: options.promotionType }, targetBeforeMove);
+    this.pushMoveHistory(
+      movingPiece,
+      from,
+      to,
+      { ...chosen, promotionType: options.promotionType },
+      targetBeforeMove,
+      options.meta || {}
+    );
     return { ok: true };
   }
 
@@ -590,7 +597,7 @@ export class ChessEngine {
     }
   }
 
-  pushMoveHistory(piece, from, to, move, target) {
+  pushMoveHistory(piece, from, to, move, target, meta = {}) {
     const capture = Boolean(target) || Boolean(move.isEnPassant);
     const pieceSymbolMap = {
       king: "K",
@@ -614,6 +621,11 @@ export class ChessEngine {
       notation = to.col === 6 ? "O-O" : "O-O-O";
     }
 
+    if (piece.type === "pawn" && (to.row === 0 || to.row === 7) && move.promotionType) {
+      const promoSymbol = { queen: "Q", rook: "R", bishop: "B", knight: "N" }[move.promotionType] || "Q";
+      notation += `=${promoSymbol}`;
+    }
+
     if (this.gameState === STATE.CHECKMATE) {
       notation += "#";
     } else if (this.gameState === STATE.CHECK) {
@@ -621,10 +633,17 @@ export class ChessEngine {
     }
 
     this.moveHistory.push({
+      ply: this.moveHistory.length + 1,
       turn: piece.color,
       from,
       to,
-      notation
+      san: notation,
+      notation,
+      uci: `${String.fromCharCode(97 + from.col)}${8 - from.row}${String.fromCharCode(97 + to.col)}${8 - to.row}`,
+      tags: meta.tags || [],
+      evalBefore: meta.evalBefore ?? null,
+      evalAfter: meta.evalAfter ?? null,
+      quality: meta.quality ?? null
     });
   }
 

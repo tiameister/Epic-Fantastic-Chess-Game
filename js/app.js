@@ -2,6 +2,7 @@ import { ChessEngine } from "./chess-engine.js";
 import { ChessUI } from "./ui.js";
 import { GameSound } from "./sound.js";
 import { ProgressionSystem } from "./systems/progression-system.js";
+import { EvaluationAdapter } from "./engine/evaluator.js";
 
 const elements = {
   board: document.getElementById("board"),
@@ -19,6 +20,10 @@ const elements = {
   achievementsList: document.getElementById("achievementsList"),
   questsList: document.getElementById("questsList"),
   historyList: document.getElementById("historyList"),
+  historyStartBtn: document.getElementById("historyStartBtn"),
+  historyPrevBtn: document.getElementById("historyPrevBtn"),
+  historyNextBtn: document.getElementById("historyNextBtn"),
+  historyEndBtn: document.getElementById("historyEndBtn"),
   presetSelect: document.getElementById("presetSelect"),
   timeControl: document.getElementById("timeControl"),
   themeSelect: document.getElementById("themeSelect"),
@@ -35,11 +40,17 @@ const elements = {
   gameOverPanel: document.getElementById("gameOverPanel"),
   gameOverTitle: document.getElementById("gameOverTitle"),
   gameOverText: document.getElementById("gameOverText"),
-  playAgainBtn: document.getElementById("playAgainBtn")
+  playAgainBtn: document.getElementById("playAgainBtn"),
+  promotionModal: document.getElementById("promotionModal"),
+  promotionChoices: document.getElementById("promotionChoices"),
+  analysisScrubber: document.getElementById("analysisScrubber"),
+  evalGraph: document.getElementById("evalGraph"),
+  reviewList: document.getElementById("reviewList")
 };
 
 const engine = new ChessEngine();
 const sound = new GameSound();
 const progression = new ProgressionSystem();
-const ui = new ChessUI(engine, elements, sound, progression);
+const evaluator = new EvaluationAdapter();
+const ui = new ChessUI(engine, elements, sound, progression, evaluator);
 ui.init();

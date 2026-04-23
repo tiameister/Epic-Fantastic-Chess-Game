@@ -554,6 +554,50 @@ label {
   margin: 0;
 }
 
+.promotion-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.68);
+  display: grid;
+  place-items: center;
+  z-index: 20;
+}
+
+.promotion-card {
+  min-width: 280px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.94);
+  padding: 14px;
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.65);
+}
+
+.promotion-card h3 {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.promotion-choices {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.promotion-choice-btn {
+  padding: 10px 0;
+  font-size: 1.8rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: linear-gradient(120deg, #1e293b, #0f172a);
+  color: #f8fafc;
+  cursor: pointer;
+}
+
+.promotion-choice-btn:hover {
+  filter: brightness(1.12);
+}
+
 .hidden {
   display: none;
 }
@@ -618,6 +662,18 @@ label {
   color: var(--muted);
 }
 
+.history-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.history-controls button {
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  min-width: 38px;
+}
+
 #historyList {
   margin: 0;
   padding-left: 22px;
@@ -625,6 +681,65 @@ label {
   overflow: auto;
   font-size: 0.95rem;
   line-height: 1.4;
+}
+
+.history-move-btn {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 0.82rem;
+}
+
+.history-move-btn:hover {
+  filter: brightness(1.12);
+}
+
+.analysis-panel {
+  margin-top: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.38);
+  padding: 12px;
+}
+
+.analysis-panel h2 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  color: var(--muted);
+}
+
+#analysisScrubber {
+  width: 100%;
+  margin: 6px 0 10px;
+}
+
+#evalGraph {
+  width: 100%;
+  height: 180px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.7);
+}
+
+.review-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  max-height: 170px;
+  overflow: auto;
+  font-size: 0.86rem;
+}
+
+.review-badge {
+  display: inline-block;
+  min-width: 22px;
+  text-align: center;
+  margin-right: 6px;
+  border-radius: 999px;
+  padding: 2px 6px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(51, 65, 85, 0.4);
 }
 
 @keyframes piece-pop {

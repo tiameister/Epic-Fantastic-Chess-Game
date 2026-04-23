@@ -2,13 +2,15 @@ import { COLOR, PIECE_ICONS, STATE } from "./constants.js";
 import { PRESETS } from "./presets.js";
 import { evaluatePosition, materialScore, scoreToBarPercent } from "./evaluation.js";
 import { getTacticalSignal } from "./tactical-eval.js";
+import { createStateStore } from "./state/store.js";
 
 export class ChessUI {
-  constructor(engine, elements, sound, progression = null) {
+  constructor(engine, elements, sound, progression = null, evaluator = null) {
     this.engine = engine;
     this.elements = elements;
     this.sound = sound;
     this.progression = progression;
+    this.evaluator = evaluator;
     this.selected = null;
     this.legalMoves = [];
     this.orientation = COLOR.WHITE;
@@ -23,13 +25,30 @@ export class ChessUI {
     };
     this.clockSnapshotHistory = [];
     this.isEvalVisible = true;
-    this.lastEvaluationScore = evaluatePosition(this.engine);
+    this.lastEvaluationScore = this.evaluateScore();
     this.currentMoveQuality = "Neutral";
     this.heartbeatLevel = 0;
     this.squareElements = new Map();
     this.matchRecorded = false;
     this.matchStats = this.createEmptyMatchStats();
     this.lastEvalSnapshot = { score: 0, label: "" };
+    this.pendingPromotion = null;
+    this.timelineSnapshots = [];
+    this.currentPly = 0;
+    this.isViewingHistory = false;
+    this.stateStore = createStateStore({
+      gameState: { turn: this.engine.turn, status: this.engine.gameState, result: null, ply: 0 },
+      uiState: {
+        selectedSquare: null,
+        legalHighlights: [],
+        orientation: this.orientation,
+        modals: { promotion: false, gameOver: false }
+      },
+      metaState: {
+        settings: { autoFlip: this.autoFlipEnabled, showEval: this.isEvalVisible },
+        profile: null
+      }
+    });
   }
 
   init() {
@@ -55,11 +74,13 @@ export class ChessUI {
       if (this.autoFlipEnabled) {
         this.orientation = this.engine.turn;
       }
+      this.stateStore.dispatch({ type: "UI/SET_ORIENTATION", payload: this.orientation });
       this.render(this.autoFlipEnabled ? "Auto flip enabled." : "Auto flip disabled.");
     });
 
     this.elements.flipBtn.addEventListener("click", () => {
       this.orientation = this.orientation === COLOR.WHITE ? COLOR.BLACK : COLOR.WHITE;
+      this.stateStore.dispatch({ type: "UI/SET_ORIENTATION", payload: this.orientation });
       this.render("Board orientation changed.");
     });
 
@@ -71,11 +92,19 @@ export class ChessUI {
     });
 
     this.elements.undoBtn.addEventListener("click", () => {
+      if (this.isViewingHistory) {
+        this.goToPly(this.timelineSnapshots.length - 1);
+      }
       const didUndo = this.engine.undo();
       if (!didUndo) {
         this.render("No moves available to undo.");
         return;
       }
+      if (this.timelineSnapshots.length > 1) {
+        this.timelineSnapshots.pop();
+      }
+      this.currentPly = this.timelineSnapshots.length - 1;
+      this.isViewingHistory = false;
       const prevClocks = this.clockSnapshotHistory.pop();
       if (prevClocks) {
         this.timeRemaining.white = prevClocks.white;
@@ -88,6 +117,7 @@ export class ChessUI {
       this.startClock();
       this.selected = null;
       this.legalMoves = [];
+      this.stateStore.dispatch({ type: "UI/CLEAR_SELECTION" });
       this.playSound("move");
       this.render("Last move undone.");
     });
@@ -100,7 +130,17 @@ export class ChessUI {
       this.resetGame();
     });
 
+    this.elements.historyStartBtn.addEventListener("click", () => this.goToPly(0));
+    this.elements.historyPrevBtn.addEventListener("click", () => this.goToPly(Math.max(0, this.currentPly - 1)));
+    this.elements.historyNextBtn.addEventListener("click", () => this.goToPly(Math.min(this.timelineSnapshots.length - 1, this.currentPly + 1)));
+    this.elements.historyEndBtn.addEventListener("click", () => this.goToPly(this.timelineSnapshots.length - 1));
+    this.elements.analysisScrubber.addEventListener("input", () => {
+      const value = Number(this.elements.analysisScrubber.value);
+      this.goToPly(value);
+    });
+
     this.applyTheme(this.elements.themeSelect.value);
+    this.rebuildTimelineFromCurrent();
     this.resetClocks();
     this.startClock();
     this.renderProfile();
@@ -125,13 +165,16 @@ export class ChessUI {
     this.hasClockStarted = false;
     this.orientation = COLOR.WHITE;
     this.currentMoveQuality = "Neutral";
-    this.lastEvaluationScore = evaluatePosition(this.engine);
+    this.lastEvaluationScore = this.evaluateScore();
     this.sound.stopHeartbeat();
     this.sound.stopRhythm();
     this.heartbeatLevel = 0;
     this.elements.boardFrame.classList.remove("critical", "blunder-hit", "glitch-hit");
     this.matchRecorded = false;
     this.matchStats = this.createEmptyMatchStats();
+    this.pendingPromotion = null;
+    this.closePromotionPrompt();
+    this.rebuildTimelineFromCurrent();
     this.toggleGameOverPanel(false);
     this.resetClocks();
     this.startClock();
@@ -144,6 +187,14 @@ export class ChessUI {
 
   colorName(color) {
     return color === COLOR.WHITE ? "White" : "Black";
+  }
+
+  evaluateScore(depth = 1) {
+    if (this.evaluator && typeof this.evaluator.evaluate === "function") {
+      const result = this.evaluator.evaluate(this.engine, depth);
+      return Number(result?.score ?? 0);
+    }
+    return evaluatePosition(this.engine);
   }
 
   statusText() {
@@ -171,6 +222,10 @@ export class ChessUI {
   }
 
   handleSquareClick(row, col) {
+    if (this.pendingPromotion) {
+      this.setMessage("Finish pawn promotion first.");
+      return;
+    }
     if (
       this.engine.gameState === STATE.CHECKMATE
       || this.engine.gameState === STATE.STALEMATE
@@ -207,60 +262,43 @@ export class ChessUI {
     if (isLegalMove) {
       const clockSnapshot = { ...this.timeRemaining };
       const movingSide = this.engine.turn;
-      const scoreBefore = evaluatePosition(this.engine);
+      const scoreBefore = this.evaluateScore();
       const materialBefore = materialScore(this.engine.board);
       const chosen = this.legalMoves.find((m) => m.row === row && m.col === col);
       const targetBeforeMove = this.engine.getPiece(row, col, this.engine.board);
-      const result = this.engine.move(this.selected, { row, col });
+      const bestMoveHint = this.computeBestMoveHint(movingSide);
+      const from = { ...this.selected };
+      const to = { row, col };
       this.selected = null;
       this.legalMoves = [];
-      if (result.ok) {
-        if (movingSide === COLOR.WHITE) {
-          this.hasClockStarted = true;
-        }
-        if (!this.isUntimed && this.incrementSeconds > 0) {
-          this.timeRemaining[movingSide] += this.incrementSeconds;
-        }
-        this.clockSnapshotHistory.push(clockSnapshot);
-        const scoreAfter = evaluatePosition(this.engine);
-        const materialAfter = materialScore(this.engine.board);
-        const moveAssessment = this.assessMoveQuality(
-          scoreBefore,
-          scoreAfter,
-          materialBefore,
-          materialAfter,
-          movingSide,
+      if (this.engine.isPromotionMove(from, to)) {
+        this.pendingPromotion = {
+          from,
+          to,
           chosen,
-          targetBeforeMove
-        );
-        this.currentMoveQuality = moveAssessment.label;
-        if (moveAssessment.label === "Blunder") {
-          this.matchStats.blunders[movingSide] += 1;
-        }
-        this.playMoveSound(chosen, moveAssessment);
-        this.applyMoveQualityEffects(moveAssessment);
-        if (moveAssessment.isCapture) {
-          this.matchStats.captures[movingSide] += 1;
-          this.spawnCaptureParticles(row, col, targetBeforeMove?.color ?? this.oppositeColor(movingSide));
-          if (this.progression) {
-            this.progression.recordCapture(1);
-          }
-        }
-        if (this.engine.gameState === STATE.CHECK) {
-          this.matchStats.checksGiven[movingSide] += 1;
-          if (this.progression) {
-            this.progression.recordCheck(1);
-          }
-        }
-        if (this.progression) {
-          this.progression.recordMoveQuality(moveAssessment.label);
-        }
-        if (this.autoFlipEnabled) {
-          this.orientation = this.engine.turn;
-        }
-        this.lastEvaluationScore = scoreAfter;
-        this.awardMoveXp(moveAssessment);
+          targetBeforeMove,
+          movingSide,
+          clockSnapshot,
+          scoreBefore,
+          materialBefore,
+          bestMoveHint
+        };
+        this.openPromotionPrompt(movingSide);
+        this.render("Choose a promotion piece.");
+        return;
       }
+
+      const result = this.commitMove({
+        from,
+        to,
+        chosen,
+        targetBeforeMove,
+        movingSide,
+        clockSnapshot,
+        scoreBefore,
+        materialBefore,
+        bestMoveHint
+      });
       this.startClock();
       this.render(result.ok ? "Move completed." : result.reason);
       this.playStateSound();
@@ -275,9 +313,103 @@ export class ChessUI {
     this.render("Invalid destination. Choose a highlighted move.");
   }
 
+  commitMove(context, promotionType = null) {
+    this.exitHistoryViewIfNeeded();
+    const result = this.engine.move(context.from, context.to, promotionType ? { promotionType } : {});
+    if (!result.ok) {
+      return result;
+    }
+    const {
+      movingSide,
+      clockSnapshot,
+      chosen,
+      targetBeforeMove,
+      scoreBefore,
+      materialBefore,
+      to,
+      bestMoveHint
+    } = context;
+
+    if (movingSide === COLOR.WHITE) {
+      this.hasClockStarted = true;
+    }
+    if (!this.isUntimed && this.incrementSeconds > 0) {
+      this.timeRemaining[movingSide] += this.incrementSeconds;
+    }
+    this.clockSnapshotHistory.push(clockSnapshot);
+    const scoreAfter = this.evaluateScore();
+    const materialAfter = materialScore(this.engine.board);
+    const moveAssessment = this.assessMoveQuality(
+      scoreBefore,
+      scoreAfter,
+      materialBefore,
+      materialAfter,
+      movingSide,
+      chosen,
+      targetBeforeMove
+    );
+    this.currentMoveQuality = moveAssessment.label;
+    const latestMove = this.engine.moveHistory[this.engine.moveHistory.length - 1];
+    if (latestMove) {
+      latestMove.evalBefore = scoreBefore;
+      latestMove.evalAfter = scoreAfter;
+      latestMove.quality = moveAssessment.label;
+      latestMove.tags = this.buildMoveTags(moveAssessment);
+      latestMove.badge = this.getQualityBadge(moveAssessment.label);
+      latestMove.bestMoveUci = bestMoveHint?.uci || null;
+      latestMove.bestMoveSan = bestMoveHint?.san || null;
+    }
+    if (moveAssessment.label === "Blunder") {
+      this.matchStats.blunders[movingSide] += 1;
+    }
+    this.playMoveSound(chosen, moveAssessment);
+    this.applyMoveQualityEffects(moveAssessment);
+    if (moveAssessment.isCapture) {
+      this.matchStats.captures[movingSide] += 1;
+      this.spawnCaptureParticles(to.row, to.col, targetBeforeMove?.color ?? this.oppositeColor(movingSide));
+      if (this.progression) {
+        this.progression.recordCapture(1);
+      }
+    }
+    if (this.engine.gameState === STATE.CHECK) {
+      this.matchStats.checksGiven[movingSide] += 1;
+      if (this.progression) {
+        this.progression.recordCheck(1);
+      }
+    }
+    if (this.progression) {
+      this.progression.recordMoveQuality(moveAssessment.label);
+    }
+    if (this.autoFlipEnabled) {
+      this.orientation = this.engine.turn;
+    }
+    this.lastEvaluationScore = scoreAfter;
+    this.awardMoveXp(moveAssessment);
+    this.timelineSnapshots.push(this.engine.getSnapshot());
+    this.currentPly = this.timelineSnapshots.length - 1;
+    this.isViewingHistory = false;
+    return result;
+  }
+
+  buildMoveTags(moveAssessment) {
+    const tags = [];
+    if (moveAssessment.isCapture) tags.push("capture");
+    if (moveAssessment.label === "Great Move") tags.push("great");
+    if (moveAssessment.label === "Blunder") tags.push("blunder");
+    if (moveAssessment.label === "Mistake") tags.push("mistake");
+    return tags;
+  }
+
   select(row, col) {
     this.selected = { row, col };
     this.legalMoves = this.engine.getLegalMoves(row, col);
+    this.stateStore.dispatch({
+      type: "UI/SELECT_SQUARE",
+      payload: {
+        selectedSquare: { row, col },
+        legalHighlights: this.legalMoves.map((m) => ({ row: m.row, col: m.col }))
+      }
+    });
     if (this.legalMoves.length === 0) {
       this.render("No legal moves for this piece.");
       return;
@@ -302,12 +434,14 @@ export class ChessUI {
     this.renderProfile();
     this.renderMetaProgress();
     this.renderHistory();
+    this.renderAnalysisPanel();
     this.renderTimers();
     this.renderEvaluation(this.lastEvalSnapshot);
     this.renderBoard();
     this.updateGameOverPanel();
     this.updateCriticalAtmosphere();
     this.sound.updateMood(this.lastEvalSnapshot.score, this.engine.turn);
+    this.syncStore();
   }
 
   applyPreset(presetId) {
@@ -325,16 +459,20 @@ export class ChessUI {
 
     this.selected = null;
     this.legalMoves = [];
+    this.stateStore.dispatch({ type: "UI/CLEAR_SELECTION" });
     this.clockSnapshotHistory = [];
     this.hasClockStarted = false;
+    this.pendingPromotion = null;
+    this.closePromotionPrompt();
     this.orientation = this.autoFlipEnabled ? this.engine.turn : COLOR.WHITE;
     this.currentMoveQuality = "Neutral";
-    this.lastEvaluationScore = evaluatePosition(this.engine);
+    this.lastEvaluationScore = this.evaluateScore();
     this.sound.stopHeartbeat();
     this.sound.stopRhythm();
     this.heartbeatLevel = 0;
     this.elements.boardFrame.classList.remove("critical", "blunder-hit", "glitch-hit");
     this.matchStats = this.createEmptyMatchStats();
+    this.rebuildTimelineFromCurrent();
     this.toggleGameOverPanel(false);
     this.resetClocks();
     this.startClock();
@@ -454,6 +592,7 @@ export class ChessUI {
 
   toggleGameOverPanel(show) {
     this.elements.gameOverPanel.classList.toggle("hidden", !show);
+    this.stateStore.dispatch({ type: "UI/SET_MODAL", payload: { key: "gameOver", value: show } });
   }
 
   renderEvaluation(snapshot = null) {
@@ -499,7 +638,7 @@ export class ChessUI {
       return { score: -10, label: "Timeout - Black wins" };
     }
 
-    let score = evaluatePosition(this.engine);
+    let score = this.evaluateScore();
     const tacticalSignal = getTacticalSignal(this.engine, score);
     if (tacticalSignal) {
       return tacticalSignal;
@@ -517,10 +656,202 @@ export class ChessUI {
       const li = document.createElement("li");
       const turnNum = Math.floor(index / 2) + 1;
       const prefix = index % 2 === 0 ? `${turnNum}.` : `${turnNum}...`;
-      li.textContent = `${prefix} ${move.notation}`;
+      const moveBtn = document.createElement("button");
+      moveBtn.type = "button";
+      moveBtn.className = "history-move-btn";
+      moveBtn.textContent = `${prefix} ${move.san || move.notation}`;
+      moveBtn.addEventListener("click", () => this.goToPly(index + 1));
+      li.appendChild(moveBtn);
       this.elements.historyList.appendChild(li);
     });
     this.elements.historyList.scrollTop = this.elements.historyList.scrollHeight;
+  }
+
+  renderAnalysisPanel() {
+    if (!this.elements.analysisScrubber) {
+      return;
+    }
+    const max = Math.max(0, this.timelineSnapshots.length - 1);
+    this.elements.analysisScrubber.max = String(max);
+    this.elements.analysisScrubber.value = String(Math.min(this.currentPly, max));
+    this.drawEvalGraph();
+    this.renderReviewList();
+  }
+
+  drawEvalGraph() {
+    const canvas = this.elements.evalGraph;
+    if (!canvas) {
+      return;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+    const width = canvas.width;
+    const height = canvas.height;
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = "rgba(15,23,42,0.8)";
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = "rgba(148,163,184,0.4)";
+    ctx.beginPath();
+    ctx.moveTo(0, height / 2);
+    ctx.lineTo(width, height / 2);
+    ctx.stroke();
+
+    const points = [{ ply: 0, score: 0 }];
+    this.engine.moveHistory.forEach((move, index) => {
+      points.push({ ply: index + 1, score: Number(move.evalAfter ?? 0) });
+    });
+    if (points.length < 2) {
+      return;
+    }
+    const maxAbs = Math.max(1, ...points.map((p) => Math.min(10, Math.abs(p.score))));
+    ctx.strokeStyle = "#22d3ee";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    points.forEach((point, i) => {
+      const x = (point.ply / (points.length - 1)) * (width - 16) + 8;
+      const normalized = Math.max(-10, Math.min(10, point.score)) / maxAbs;
+      const y = (height / 2) - (normalized * (height / 2 - 12));
+      if (i === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    ctx.stroke();
+  }
+
+  renderReviewList() {
+    const list = this.elements.reviewList;
+    if (!list) {
+      return;
+    }
+    list.innerHTML = "";
+    this.engine.moveHistory.forEach((move, index) => {
+      if (!move.quality || move.quality === "Neutral") {
+        return;
+      }
+      const li = document.createElement("li");
+      const badge = document.createElement("span");
+      badge.className = "review-badge";
+      badge.textContent = move.badge || this.getQualityBadge(move.quality);
+      const turnNum = Math.floor(index / 2) + 1;
+      const better = (move.quality === "Blunder" || move.quality === "Mistake")
+        ? ` Better: ${move.bestMoveSan || move.bestMoveUci || "n/a"}`
+        : "";
+      li.textContent = `${turnNum}${index % 2 === 0 ? "." : "..."} ${move.san || move.notation} - ${move.quality}.${better}`;
+      li.prepend(badge);
+      list.appendChild(li);
+    });
+  }
+
+  getQualityBadge(label) {
+    const map = {
+      "Blunder": "??",
+      "Mistake": "?",
+      "Neutral": "?!",
+      "Good Move": "!",
+      "Great Move": "!!",
+      "Winning Advantage": "!!"
+    };
+    return map[label] || "?!";
+  }
+
+  computeBestMoveHint(movingSide) {
+    const snapshot = this.engine.getSnapshot();
+    let best = null;
+    for (let row = 0; row < 8; row += 1) {
+      for (let col = 0; col < 8; col += 1) {
+        const piece = this.engine.getPiece(row, col, this.engine.board);
+        if (!piece || piece.color !== movingSide) {
+          continue;
+        }
+        const legal = this.engine.getLegalMoves(row, col);
+        for (const candidate of legal) {
+          this.engine.restoreSnapshot(snapshot);
+          const result = this.engine.move(
+            { row, col },
+            { row: candidate.row, col: candidate.col },
+            candidate.promotionType ? { promotionType: candidate.promotionType } : {}
+          );
+          if (!result.ok) {
+            continue;
+          }
+          const score = this.evaluateScore();
+          const perspective = movingSide === COLOR.WHITE ? score : -score;
+          const candidateMove = this.engine.moveHistory[this.engine.moveHistory.length - 1];
+          if (!best || perspective > best.perspective) {
+            best = {
+              perspective,
+              score,
+              san: candidateMove?.san || null,
+              uci: `${String.fromCharCode(97 + col)}${8 - row}${String.fromCharCode(97 + candidate.col)}${8 - candidate.row}`
+            };
+          }
+        }
+      }
+    }
+    this.engine.restoreSnapshot(snapshot);
+    return best;
+  }
+
+  rebuildTimelineFromCurrent() {
+    this.timelineSnapshots = [this.engine.getSnapshot()];
+    this.currentPly = 0;
+    this.isViewingHistory = false;
+  }
+
+  goToPly(ply) {
+    if (this.timelineSnapshots.length === 0) {
+      return;
+    }
+    const clamped = Math.max(0, Math.min(ply, this.timelineSnapshots.length - 1));
+    const snapshot = this.timelineSnapshots[clamped];
+    if (!snapshot) {
+      return;
+    }
+    this.engine.restoreSnapshot(snapshot);
+    this.currentPly = clamped;
+    this.isViewingHistory = clamped !== this.timelineSnapshots.length - 1;
+    this.selected = null;
+    this.legalMoves = [];
+    this.stateStore.dispatch({ type: "UI/CLEAR_SELECTION" });
+    this.render(this.isViewingHistory ? `Viewing move ${clamped}.` : "Back to latest position.");
+  }
+
+  exitHistoryViewIfNeeded() {
+    if (!this.isViewingHistory) {
+      return;
+    }
+    const latest = this.timelineSnapshots[this.timelineSnapshots.length - 1];
+    if (latest) {
+      this.engine.restoreSnapshot(latest);
+    }
+    this.currentPly = this.timelineSnapshots.length - 1;
+    this.isViewingHistory = false;
+  }
+
+  syncStore() {
+    this.stateStore.dispatch({
+      type: "GAME/SYNC",
+      payload: {
+        turn: this.engine.turn,
+        status: this.engine.gameState,
+        result: this.engine.winner || this.engine.drawReason || null,
+        ply: this.engine.moveHistory.length
+      }
+    });
+    this.stateStore.dispatch({
+      type: "META/SYNC",
+      payload: {
+        settings: {
+          autoFlip: this.autoFlipEnabled,
+          showEval: this.isEvalVisible
+        },
+        profile: this.progression ? { ...this.progression.profile } : null
+      }
+    });
   }
 
   renderBoard() {
@@ -710,7 +1041,7 @@ export class ChessUI {
   }
 
   updateCriticalAtmosphere() {
-    const evalScore = evaluatePosition(this.engine);
+    const evalScore = this.evaluateScore();
     const highStakes = this.engine.gameState === STATE.CHECK || Math.abs(evalScore) >= 7;
 
     this.elements.boardFrame.classList.toggle("critical", highStakes);
@@ -795,6 +1126,48 @@ export class ChessUI {
       li.textContent = `${quest.title} (${quest.progress}/${quest.target})`;
       this.elements.questsList.appendChild(li);
     });
+  }
+
+  openPromotionPrompt(color) {
+    if (!this.elements.promotionModal || !this.elements.promotionChoices) {
+      return;
+    }
+    const choices = ["queen", "rook", "bishop", "knight"];
+    this.elements.promotionChoices.innerHTML = "";
+    choices.forEach((type) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "promotion-choice-btn";
+      button.textContent = PIECE_ICONS[color][type];
+      button.title = type[0].toUpperCase() + type.slice(1);
+      button.addEventListener("click", () => this.confirmPromotion(type));
+      this.elements.promotionChoices.appendChild(button);
+    });
+    this.elements.promotionModal.classList.remove("hidden");
+    this.stateStore.dispatch({ type: "UI/SET_MODAL", payload: { key: "promotion", value: true } });
+  }
+
+  closePromotionPrompt() {
+    if (!this.elements.promotionModal || !this.elements.promotionChoices) {
+      return;
+    }
+    this.elements.promotionModal.classList.add("hidden");
+    this.elements.promotionChoices.innerHTML = "";
+    this.stateStore.dispatch({ type: "UI/SET_MODAL", payload: { key: "promotion", value: false } });
+  }
+
+  confirmPromotion(type) {
+    if (!this.pendingPromotion) {
+      this.closePromotionPrompt();
+      return;
+    }
+    const context = this.pendingPromotion;
+    this.pendingPromotion = null;
+    this.closePromotionPrompt();
+    const result = this.commitMove(context, type);
+    this.startClock();
+    this.render(result.ok ? `Promoted to ${type}.` : result.reason);
+    this.playStateSound();
   }
 
   oppositeColor(color) {

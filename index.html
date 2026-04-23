@@ -138,13 +138,36 @@
 
       <section class="history-panel">
         <h2>Move History</h2>
+        <div class="history-controls">
+          <button id="historyStartBtn" type="button">|&lt;</button>
+          <button id="historyPrevBtn" type="button">&lt;</button>
+          <button id="historyNextBtn" type="button">&gt;</button>
+          <button id="historyEndBtn" type="button">&gt;|</button>
+        </div>
         <ol id="historyList"></ol>
+      </section>
+
+      <section class="analysis-panel">
+        <h2>Analysis & Review</h2>
+        <label for="analysisScrubber">
+          Position Scrubber
+          <input id="analysisScrubber" type="range" min="0" max="0" value="0">
+        </label>
+        <canvas id="evalGraph" width="900" height="180" aria-label="Evaluation graph"></canvas>
+        <ul id="reviewList" class="review-list"></ul>
       </section>
 
       <section id="gameOverPanel" class="game-over-panel hidden" aria-live="polite">
         <h2 id="gameOverTitle">Game Over</h2>
         <p id="gameOverText">Result</p>
         <button id="playAgainBtn" type="button">Play Again</button>
+      </section>
+
+      <section id="promotionModal" class="promotion-modal hidden" aria-live="polite">
+        <div class="promotion-card">
+          <h3>Choose Promotion</h3>
+          <div id="promotionChoices" class="promotion-choices"></div>
+        </div>
       </section>
     </section>
   </main>

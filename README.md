@@ -24,15 +24,24 @@ If something feels rough, that is expected and part of the learning process.
 
 Open `index.html` in a modern browser.
 
+## Run Tests
+
+Run deterministic engine regression checks:
+
+- `node ./js/tests/engine-tests.js`
+
 ## Project Structure
 
 - `index.html` - main page shell
 - `styles/main.css` - all visual styling
 - `js/chess-engine.js` - chess rules and move legality
+- `js/engine/evaluator.js` - evaluator adapter and fallback heuristic layer
 - `js/ui.js` - interaction and rendering layer
 - `js/evaluation.js` - scoring and evaluation logic
 - `js/tactical-eval.js` - tactical signal helpers
+- `js/state/store.js` - central layered state store/reducers
 - `js/sound.js` - Web Audio synthesis and DSP
+- `js/tests/engine-tests.js` - perft-style and critical position tests
 - `js/systems/progression-system.js` - persistent meta progression
 - `docs/ARCHITECTURE.md` - project architecture direction
 - `docs/EPIC_GAME_ROADMAP.md` - long-term expansion roadmap
