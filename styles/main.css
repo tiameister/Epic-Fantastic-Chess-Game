@@ -20,6 +20,8 @@
   --coord: rgba(15, 23, 42, 0.55);
   --glow: rgba(147, 51, 234, 0.35);
   --danger: rgba(239, 68, 68, 0.58);
+  --ui-radius: 12px;
+  --ui-border: 1px solid rgba(148, 163, 184, 0.24);
 }
 
 body[data-theme="obsidian"] {
@@ -98,6 +100,51 @@ body {
   box-shadow: 0 24px 48px rgba(2, 6, 23, 0.55), 0 0 0 1px rgba(147, 51, 234, 0.26);
 }
 
+.view-tabs {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  border: var(--ui-border);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.45);
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 0.82rem;
+}
+
+.tab-btn.active {
+  background: linear-gradient(120deg, rgba(59, 130, 246, 0.28), rgba(168, 85, 247, 0.24));
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.28);
+}
+
+.hidden-tab {
+  display: none !important;
+}
+
+.ui-panel {
+  border: var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: rgba(15, 23, 42, 0.3);
+}
+
+.ui-badge {
+  border-radius: 999px;
+  border: var(--ui-border);
+  padding: 2px 8px;
+  font-size: 0.75rem;
+}
+
+.ui-chip {
+  border-radius: 8px;
+  border: var(--ui-border);
+  padding: 3px 8px;
+  font-size: 0.74rem;
+}
+
 .topbar h1 {
   margin: 0;
   font-size: clamp(1.4rem, 3vw, 2rem);
@@ -119,8 +166,8 @@ body {
 }
 
 .status-item {
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 12px;
+  border: var(--ui-border);
+  border-radius: var(--ui-radius);
   padding: 10px 12px;
   background: var(--panel-bg);
   min-height: 72px;
@@ -172,8 +219,8 @@ body {
 }
 
 .profile-item {
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 10px;
+  border: var(--ui-border);
+  border-radius: var(--ui-radius);
   padding: 9px 10px;
   background: rgba(15, 23, 42, 0.26);
 }
@@ -191,8 +238,8 @@ body {
 }
 
 .meta-card {
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 10px;
+  border: var(--ui-border);
+  border-radius: var(--ui-radius);
   background: rgba(15, 23, 42, 0.26);
   padding: 10px;
 }
@@ -389,6 +436,10 @@ body[data-theme="obsidian"] .square.black {
 .primary-actions {
   margin-top: 18px;
   justify-content: flex-start;
+}
+
+.primary-actions button {
+  flex: 1 1 120px;
 }
 
 .advanced-controls {
@@ -699,7 +750,7 @@ label {
 .analysis-panel {
   margin-top: 16px;
   border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 12px;
+  border-radius: var(--ui-radius);
   background: rgba(15, 23, 42, 0.38);
   padding: 12px;
 }
@@ -740,6 +791,59 @@ label {
   padding: 2px 6px;
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: rgba(51, 65, 85, 0.4);
+}
+
+.training-panel {
+  margin-top: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: var(--ui-radius);
+  background: rgba(15, 23, 42, 0.38);
+  padding: 12px;
+}
+
+.training-panel h2 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  color: var(--muted);
+}
+
+.training-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.training-actions button {
+  flex: 1 1 150px;
+}
+
+.profile-tools {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.profile-tools button {
+  flex: 1 1 170px;
+}
+
+body.layout-focus .meta-panel,
+body.layout-focus .training-panel,
+body.layout-focus .analysis-panel {
+  opacity: 0.72;
+}
+
+body.layout-analysis .board-stage {
+  opacity: 0.88;
+}
+
+body.layout-analysis .analysis-panel {
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.3);
+}
+
+body.layout-training .training-panel {
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.35);
 }
 
 @keyframes piece-pop {

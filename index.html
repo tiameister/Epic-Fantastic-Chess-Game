@@ -14,7 +14,14 @@
         <p>Local 2-player game on one screen</p>
       </header>
 
-      <section class="status-panel">
+      <nav class="view-tabs" aria-label="Primary views">
+        <button id="tabGameBtn" type="button" class="tab-btn active" data-tab-target="game">Game</button>
+        <button id="tabAnalysisBtn" type="button" class="tab-btn" data-tab-target="analysis">Analysis</button>
+        <button id="tabProfileBtn" type="button" class="tab-btn" data-tab-target="profile">Profile</button>
+        <button id="tabQuestsBtn" type="button" class="tab-btn" data-tab-target="quests">Quests</button>
+      </nav>
+
+      <section class="status-panel tab-section" data-tab-section="game">
         <div class="status-item">
           <span class="label">Turn</span>
           <strong id="turnLabel">White</strong>
@@ -45,7 +52,7 @@
         </div>
       </section>
 
-      <section class="profile-panel">
+      <section class="profile-panel tab-section" data-tab-section="profile">
         <div class="profile-item">
           <span class="label">Level</span>
           <strong id="profileLevel">1</strong>
@@ -62,9 +69,23 @@
           <span class="label">Win Rate</span>
           <strong id="profileWinrate">0%</strong>
         </div>
+        <div class="profile-item">
+          <span class="label">Avg Accuracy</span>
+          <strong id="profileAccuracy">0%</strong>
+        </div>
+        <div class="profile-item">
+          <span class="label">Best Puzzle Streak</span>
+          <strong id="profileBestStreak">0</strong>
+        </div>
       </section>
 
-      <section class="meta-panel">
+      <section class="profile-tools tab-section" data-tab-section="profile">
+        <button id="exportProfileBtn" type="button">Export Profile JSON</button>
+        <button id="importProfileBtn" type="button">Import Profile JSON</button>
+        <input id="importProfileInput" type="file" accept="application/json" class="hidden">
+      </section>
+
+      <section class="meta-panel tab-section" data-tab-section="quests">
         <div class="meta-card">
           <h3>Achievements</h3>
           <ul id="achievementsList" class="meta-list"></ul>
@@ -75,7 +96,7 @@
         </div>
       </section>
 
-      <section class="board-stage">
+      <section class="board-stage tab-section" data-tab-section="game">
         <section id="evalPanel" class="eval-panel side">
           <div class="eval-track-vertical" aria-hidden="true">
             <div id="evalFill" class="eval-fill-vertical"></div>
@@ -88,10 +109,14 @@
         </section>
       </section>
 
-      <footer class="actions primary-actions">
-        <button id="resetBtn" type="button">New Game</button>
-        <button id="undoBtn" type="button">Undo Move</button>
-        <button id="flipBtn" type="button">Flip Board</button>
+      <footer class="actions primary-actions tab-section" data-tab-section="game">
+        <button id="resetBtn" type="button" aria-label="Start a new game">New Game</button>
+        <button id="undoBtn" type="button" aria-label="Undo last move">Undo Move</button>
+        <button id="flipBtn" type="button" aria-label="Flip board orientation">Flip Board</button>
+        <button id="pauseClockBtn" type="button" aria-label="Pause or resume clock">Pause Clock</button>
+        <button id="offerDrawBtn" type="button" aria-label="Offer draw in local mode">Offer Draw</button>
+        <button id="resignBtn" type="button" aria-label="Resign current game">Resign</button>
+        <button id="rematchBtn" type="button" aria-label="Start rematch">Rematch</button>
       </footer>
 
       <details class="advanced-controls">
@@ -110,12 +135,14 @@
             Time
             <select id="timeControl">
               <option value="0|0">No Clock</option>
-              <option value="60|0">1 min</option>
-              <option value="180|0">3 min</option>
-              <option value="300|0">5 min</option>
-              <option value="600|0" selected>10 min</option>
-              <option value="900|10">15 + 10</option>
-              <option value="1800|0">30 min</option>
+              <option value="60|0|0">Bullet 1+0</option>
+              <option value="120|1|0">Bullet 2+1</option>
+              <option value="180|2|0">Blitz 3+2</option>
+              <option value="300|0|0">Blitz 5+0</option>
+              <option value="600|0|0" selected>Rapid 10+0</option>
+              <option value="900|10|0">Rapid 15+10</option>
+              <option value="1800|0|2">Classical 30+0 d2</option>
+              <option value="2700|15|0">Classical 45+15</option>
             </select>
           </label>
           <label for="themeSelect">
@@ -132,12 +159,27 @@
             Auto Flip
             <input id="autoFlipToggle" type="checkbox">
           </label>
+          <label for="layoutPreset">
+            Layout
+            <select id="layoutPreset">
+              <option value="default" selected>Default</option>
+              <option value="focus">Focus Mode</option>
+              <option value="analysis">Analysis Mode</option>
+              <option value="training">Training Mode</option>
+            </select>
+          </label>
           <button id="toggleEvalBtn" type="button">Hide Eval</button>
         </section>
       </details>
 
-      <section class="history-panel">
+      <section class="history-panel tab-section" data-tab-section="game">
         <h2>Move History</h2>
+        <div class="history-controls">
+          <button id="exportPgnBtn" type="button">Export PGN</button>
+          <button id="importPgnBtn" type="button">Import PGN</button>
+          <button id="continueLastBtn" type="button">Continue Last Game</button>
+          <input id="importPgnInput" type="file" accept=".pgn,text/plain" class="hidden">
+        </div>
         <div class="history-controls">
           <button id="historyStartBtn" type="button">|&lt;</button>
           <button id="historyPrevBtn" type="button">&lt;</button>
@@ -147,7 +189,13 @@
         <ol id="historyList"></ol>
       </section>
 
-      <section class="analysis-panel">
+      <section class="saved-games-panel tab-section" data-tab-section="analysis">
+        <h2>Saved Games</h2>
+        <input id="savedGamesSearch" type="text" placeholder="Search result, reason, moves">
+        <ul id="savedGamesList" class="review-list"></ul>
+      </section>
+
+      <section class="analysis-panel tab-section" data-tab-section="analysis">
         <h2>Analysis & Review</h2>
         <label for="analysisScrubber">
           Position Scrubber
@@ -155,6 +203,19 @@
         </label>
         <canvas id="evalGraph" width="900" height="180" aria-label="Evaluation graph"></canvas>
         <ul id="reviewList" class="review-list"></ul>
+      </section>
+
+      <section class="training-panel tab-section" data-tab-section="quests">
+        <h2>Training</h2>
+        <div class="training-actions">
+          <button id="trainingOffBtn" type="button">Training Off</button>
+          <button id="openingTrainerBtn" type="button">Opening Trainer</button>
+          <button id="puzzleModeBtn" type="button">Puzzle Mode</button>
+          <button id="endgameDrillBtn" type="button">Endgame Drill</button>
+        </div>
+        <p id="trainingStatusText">Training mode is currently off.</p>
+        <p id="trainingStreakText">Puzzle Streak: 0</p>
+        <button id="nextTrainingBtn" type="button">Next Training Position</button>
       </section>
 
       <section id="gameOverPanel" class="game-over-panel hidden" aria-live="polite">
