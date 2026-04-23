@@ -69,6 +69,16 @@ Run deterministic engine regression checks:
 This repository is being prepared as the base for a bigger "epic fantasy chess" game.  
 The current target is to keep the code understandable, modular, and easy to extend.
 
+## Screenshots / GIFs
+
+Add preview assets in a `docs/media/` folder (suggested):
+
+- `docs/media/board.png`
+- `docs/media/analysis.png`
+- `docs/media/training.gif`
+
+Then reference them here with markdown images once captured.
+
 ## Known Limitations
 
 - No online multiplayer yet
@@ -78,3 +88,10 @@ The current target is to keep the code understandable, modular, and easy to exte
 ## Credits
 
 Designed and developed as a student learning project.
+
+## Project Docs
+
+- `CONTRIBUTING.md`
+- `CHANGELOG.md`
+- `LICENSE`
+- `docs/ROADMAP_BOARD.md`
