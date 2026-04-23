@@ -154,6 +154,8 @@ export class ChessUI {
         return `Checkmate - ${this.colorName(this.engine.winner)} wins`;
       case STATE.STALEMATE:
         return "Stalemate - Draw";
+      case STATE.DRAW:
+        return `Draw - ${this.engine.drawReason || "Rule draw"}`;
       case STATE.TIMEOUT:
         return `Timeout - ${this.colorName(this.engine.winner)} wins`;
       default:
@@ -172,6 +174,7 @@ export class ChessUI {
     if (
       this.engine.gameState === STATE.CHECKMATE
       || this.engine.gameState === STATE.STALEMATE
+      || this.engine.gameState === STATE.DRAW
       || this.engine.gameState === STATE.TIMEOUT
     ) {
       this.setMessage("Game over. Press New Game to play again.");
@@ -387,6 +390,7 @@ export class ChessUI {
     if (
       this.engine.gameState === STATE.CHECKMATE
       || this.engine.gameState === STATE.STALEMATE
+      || this.engine.gameState === STATE.DRAW
       || this.engine.gameState === STATE.TIMEOUT
     ) {
       return;
@@ -411,6 +415,7 @@ export class ChessUI {
     const isGameOver = (
       this.engine.gameState === STATE.CHECKMATE
       || this.engine.gameState === STATE.STALEMATE
+      || this.engine.gameState === STATE.DRAW
       || this.engine.gameState === STATE.TIMEOUT
     );
     this.toggleGameOverPanel(isGameOver);
@@ -436,6 +441,11 @@ export class ChessUI {
     if (this.engine.gameState === STATE.STALEMATE) {
       this.elements.gameOverTitle.textContent = "Stalemate";
       this.elements.gameOverText.textContent = "No legal moves remain. It's a draw.";
+      return;
+    }
+    if (this.engine.gameState === STATE.DRAW) {
+      this.elements.gameOverTitle.textContent = "Draw";
+      this.elements.gameOverText.textContent = this.engine.drawReason || "Draw by rule.";
       return;
     }
     this.elements.gameOverTitle.textContent = "Timeout";
@@ -478,6 +488,9 @@ export class ChessUI {
     }
     if (this.engine.gameState === STATE.STALEMATE) {
       return { score: 0, label: "Draw - Stalemate" };
+    }
+    if (this.engine.gameState === STATE.DRAW) {
+      return { score: 0, label: `Draw - ${this.engine.drawReason || "Rule draw"}` };
     }
     if (this.engine.gameState === STATE.TIMEOUT) {
       if (this.engine.winner === COLOR.WHITE) {
@@ -624,6 +637,7 @@ export class ChessUI {
     if (
       this.engine.gameState === STATE.CHECKMATE
       || this.engine.gameState === STATE.STALEMATE
+      || this.engine.gameState === STATE.DRAW
       || this.engine.gameState === STATE.TIMEOUT
     ) {
       this.playSound("breakdown");

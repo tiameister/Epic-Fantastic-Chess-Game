@@ -16,6 +16,9 @@ function evaluateTerminal(engine, side) {
   if (engine.gameState === STATE.STALEMATE) {
     return 0;
   }
+  if (engine.gameState === STATE.DRAW) {
+    return 0;
+  }
   if (engine.gameState === STATE.TIMEOUT) {
     return engine.winner === side ? 12 : -12;
   }

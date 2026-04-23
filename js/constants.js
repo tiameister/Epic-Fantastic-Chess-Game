@@ -27,5 +27,6 @@ export const STATE = {
   CHECK: "Check",
   CHECKMATE: "Checkmate",
   STALEMATE: "Stalemate",
+  DRAW: "Draw",
   TIMEOUT: "Timeout"
 };

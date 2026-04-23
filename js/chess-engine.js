@@ -12,10 +12,14 @@ export class ChessEngine {
     this.turn = COLOR.WHITE;
     this.gameState = STATE.IN_PROGRESS;
     this.winner = null;
+    this.drawReason = "";
     this.lastMove = null;
     this.enPassantTarget = null;
+    this.halfmoveClock = 0;
     this.moveHistory = [];
     this.snapshotHistory = [];
+    this.positionCounts = new Map();
+    this.recordPosition();
   }
 
   charToPiece(char, preserveCastling = false) {
@@ -70,10 +74,14 @@ export class ChessEngine {
     this.turn = turn;
     this.gameState = STATE.IN_PROGRESS;
     this.winner = null;
+    this.drawReason = "";
     this.lastMove = null;
     this.enPassantTarget = null;
+    this.halfmoveClock = 0;
     this.moveHistory = [];
     this.snapshotHistory = [];
+    this.positionCounts = new Map();
+    this.recordPosition();
     this.evaluateGameState();
     return true;
   }
@@ -319,9 +327,14 @@ export class ChessEngine {
     }
 
     if (piece.type === "pawn" && (to.row === 0 || to.row === 7)) {
-      piece.type = "queen";
+      piece.type = move.promotionType || "queen";
     }
     return nextBoard;
+  }
+
+  isPromotionMove(from, to, board = this.board) {
+    const piece = this.getPiece(from.row, from.col, board);
+    return Boolean(piece && piece.type === "pawn" && (to.row === 0 || to.row === 7));
   }
 
   findKing(color, board = this.board) {
@@ -422,18 +435,39 @@ export class ChessEngine {
     if (!hasMove) {
       this.gameState = STATE.STALEMATE;
       this.winner = null;
+      this.drawReason = "Stalemate";
+      return;
+    }
+    if (this.isInsufficientMaterial()) {
+      this.gameState = STATE.DRAW;
+      this.winner = null;
+      this.drawReason = "Insufficient material";
+      return;
+    }
+    if (this.isThreefoldRepetition()) {
+      this.gameState = STATE.DRAW;
+      this.winner = null;
+      this.drawReason = "Threefold repetition";
+      return;
+    }
+    if (this.halfmoveClock >= 100) {
+      this.gameState = STATE.DRAW;
+      this.winner = null;
+      this.drawReason = "50-move rule";
       return;
     }
     if (inCheck) {
       this.gameState = STATE.CHECK;
       this.winner = null;
+      this.drawReason = "";
       return;
     }
     this.gameState = STATE.IN_PROGRESS;
     this.winner = null;
+    this.drawReason = "";
   }
 
-  move(from, to) {
+  move(from, to, options = {}) {
     const legalMoves = this.getLegalMoves(from.row, from.col);
     const chosen = legalMoves.find((m) => m.row === to.row && m.col === to.col);
     if (!chosen) {
@@ -443,7 +477,7 @@ export class ChessEngine {
     const movingPiece = this.getPiece(from.row, from.col, this.board);
     const targetBeforeMove = this.getPiece(to.row, to.col, this.board);
     this.snapshotHistory.push(this.getSnapshot());
-    this.board = this.applyMoveOnBoard(this.board, from, to, chosen);
+    this.board = this.applyMoveOnBoard(this.board, from, to, { ...chosen, promotionType: options.promotionType });
     this.lastMove = {
       from,
       to,
@@ -454,10 +488,90 @@ export class ChessEngine {
       }
     };
     this.updateEnPassantTarget(movingPiece, from, to);
+    this.updateHalfmoveClock(movingPiece, chosen, targetBeforeMove);
     this.turn = this.opposite(this.turn);
+    this.recordPosition();
     this.evaluateGameState();
-    this.pushMoveHistory(movingPiece, from, to, chosen, targetBeforeMove);
+    this.pushMoveHistory(movingPiece, from, to, { ...chosen, promotionType: options.promotionType }, targetBeforeMove);
     return { ok: true };
+  }
+
+  updateHalfmoveClock(piece, move, targetBeforeMove) {
+    const isPawnMove = piece?.type === "pawn";
+    const isCapture = Boolean(targetBeforeMove) || Boolean(move?.isEnPassant);
+    this.halfmoveClock = (isPawnMove || isCapture) ? 0 : this.halfmoveClock + 1;
+  }
+
+  getCastlingRights() {
+    const rights = [];
+    const wk = this.getPiece(7, 4, this.board);
+    const wra = this.getPiece(7, 0, this.board);
+    const wrh = this.getPiece(7, 7, this.board);
+    const bk = this.getPiece(0, 4, this.board);
+    const bra = this.getPiece(0, 0, this.board);
+    const brh = this.getPiece(0, 7, this.board);
+
+    if (wk && wk.type === "king" && wk.color === COLOR.WHITE && !wk.hasMoved) {
+      if (wrh && wrh.type === "rook" && wrh.color === COLOR.WHITE && !wrh.hasMoved) rights.push("K");
+      if (wra && wra.type === "rook" && wra.color === COLOR.WHITE && !wra.hasMoved) rights.push("Q");
+    }
+    if (bk && bk.type === "king" && bk.color === COLOR.BLACK && !bk.hasMoved) {
+      if (brh && brh.type === "rook" && brh.color === COLOR.BLACK && !brh.hasMoved) rights.push("k");
+      if (bra && bra.type === "rook" && bra.color === COLOR.BLACK && !bra.hasMoved) rights.push("q");
+    }
+    return rights.join("") || "-";
+  }
+
+  serializeBoard() {
+    return this.board
+      .map((row) => row.map((p) => (p ? `${p.color[0]}${p.type[0]}` : "..")).join(""))
+      .join("/");
+  }
+
+  getPositionKey() {
+    const ep = this.enPassantTarget ? `${this.enPassantTarget.row},${this.enPassantTarget.col}` : "-";
+    return `${this.serializeBoard()}|${this.turn}|${this.getCastlingRights()}|${ep}`;
+  }
+
+  recordPosition() {
+    const key = this.getPositionKey();
+    const next = (this.positionCounts.get(key) || 0) + 1;
+    this.positionCounts.set(key, next);
+  }
+
+  isThreefoldRepetition() {
+    const key = this.getPositionKey();
+    return (this.positionCounts.get(key) || 0) >= 3;
+  }
+
+  isInsufficientMaterial() {
+    const pieces = [];
+    for (let row = 0; row < 8; row += 1) {
+      for (let col = 0; col < 8; col += 1) {
+        const p = this.getPiece(row, col, this.board);
+        if (!p) continue;
+        pieces.push({ ...p, row, col });
+      }
+    }
+
+    const nonKings = pieces.filter((p) => p.type !== "king");
+    if (nonKings.length === 0) {
+      return true;
+    }
+    if (nonKings.length === 1) {
+      return nonKings[0].type === "bishop" || nonKings[0].type === "knight";
+    }
+    if (nonKings.length === 2 && nonKings.every((p) => p.type === "bishop")) {
+      const whiteBishop = nonKings.find((p) => p.color === COLOR.WHITE);
+      const blackBishop = nonKings.find((p) => p.color === COLOR.BLACK);
+      if (!whiteBishop || !blackBishop) {
+        return false;
+      }
+      const whiteSquareColor = (whiteBishop.row + whiteBishop.col) % 2;
+      const blackSquareColor = (blackBishop.row + blackBishop.col) % 2;
+      return whiteSquareColor === blackSquareColor;
+    }
+    return false;
   }
 
   updateEnPassantTarget(piece, from, to) {
@@ -520,6 +634,8 @@ export class ChessEngine {
       turn: this.turn,
       gameState: this.gameState,
       winner: this.winner,
+      drawReason: this.drawReason,
+      halfmoveClock: this.halfmoveClock,
       lastMove: this.lastMove
         ? {
           from: { ...this.lastMove.from },
@@ -528,6 +644,7 @@ export class ChessEngine {
         }
         : null,
       enPassantTarget: this.enPassantTarget ? { ...this.enPassantTarget } : null,
+      positionCounts: new Map(this.positionCounts),
       moveHistory: this.moveHistory.map((m) => ({
         ...m,
         from: { ...m.from },
@@ -541,6 +658,8 @@ export class ChessEngine {
     this.turn = snapshot.turn;
     this.gameState = snapshot.gameState;
     this.winner = snapshot.winner;
+    this.drawReason = snapshot.drawReason || "";
+    this.halfmoveClock = snapshot.halfmoveClock || 0;
     this.lastMove = snapshot.lastMove
       ? {
         from: { ...snapshot.lastMove.from },
@@ -549,6 +668,7 @@ export class ChessEngine {
       }
       : null;
     this.enPassantTarget = snapshot.enPassantTarget ? { ...snapshot.enPassantTarget } : null;
+    this.positionCounts = new Map(snapshot.positionCounts || []);
     this.moveHistory = snapshot.moveHistory.map((m) => ({
       ...m,
       from: { ...m.from },
@@ -568,5 +688,6 @@ export class ChessEngine {
   endByTimeout(loserColor) {
     this.gameState = STATE.TIMEOUT;
     this.winner = this.opposite(loserColor);
+    this.drawReason = "";
   }
 }
