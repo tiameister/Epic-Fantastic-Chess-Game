@@ -27,9 +27,9 @@ export class BackgammonUI {
     this._diceCount         = 0;
     this._barDiceEl         = null;  // div inside the bar that holds the 3D dice
     this._pendingSnapTarget = null;  // point index where the last move landed
-    this.completedMoveCount = 0;
+    this.completedTurnCount = 0;
     this.adShownThisRound = false;
-    this.adTriggerMoves = 4;
+    this.adTriggerTurns = 4;
   }
 
   init() {
@@ -39,8 +39,8 @@ export class BackgammonUI {
       if (!ok) {
         this.showToast(this.language === "tr" ? "Geri alınacak hamle yok" : "No move to undo");
       } else {
-        this.completedMoveCount = Math.max(0, this.completedMoveCount - 1);
-        if (this.completedMoveCount < this.adTriggerMoves) {
+        this.completedTurnCount = Math.max(0, this.completedTurnCount - 1);
+        if (this.completedTurnCount < this.adTriggerTurns) {
           this.hideAdCard();
           this.adShownThisRound = false;
         }
@@ -95,6 +95,9 @@ export class BackgammonUI {
     });
     if (this.elements.backgammonAdCloseBtn) {
       this.elements.backgammonAdCloseBtn.addEventListener("click", () => this.hideAdCard());
+    }
+    if (this.elements.backgammonAdContinueBtn) {
+      this.elements.backgammonAdContinueBtn.addEventListener("click", () => this.hideAdCard());
     }
     this.elements.backgammonDoublingToggle.addEventListener("change", () => {
       this.engine.setDoublingEnabled(this.elements.backgammonDoublingToggle.checked);
@@ -219,6 +222,7 @@ export class BackgammonUI {
     try {
       for (let i = 0; i < steps.length; i++) {
         const step   = steps[i];
+        const turnBeforeStep = this.engine.turn;
         const result = this.engine.move(step.from, step.to);
 
         if (!result.ok) {
@@ -229,7 +233,9 @@ export class BackgammonUI {
         }
 
         this._pendingSnapTarget = typeof step.to === "number" ? step.to : null;
-        this.onSuccessfulMove();
+        if (this.engine.turn !== turnBeforeStep) {
+          this.onTurnCompleted();
+        }
         this.render();
         this.playCheckerSfx();
 
@@ -648,6 +654,7 @@ export class BackgammonUI {
   }
 
   async rollDiceFromUI() {
+    const turnBeforeRoll = this.engine.turn;
     const roll = this.engine.rollDice();
     if (!roll) return;
     this._destinations  = null;
@@ -671,6 +678,11 @@ export class BackgammonUI {
       this._diceCount = values.length;
     }
     await this.diceAnimator.roll(values);
+    if (this.engine.turn !== turnBeforeRoll) {
+      this.onTurnCompleted();
+      this.renderStatus();
+      this.updateBoardTurnCue();
+    }
 
     // After tumble settles: reveal legal hints and callout
     this.renderLegalHints();
@@ -712,9 +724,9 @@ export class BackgammonUI {
     this.showToast(text);
   }
 
-  onSuccessfulMove() {
-    this.completedMoveCount += 1;
-    if (this.adShownThisRound || this.completedMoveCount < this.adTriggerMoves) {
+  onTurnCompleted() {
+    this.completedTurnCount += 1;
+    if (this.adShownThisRound || this.completedTurnCount < this.adTriggerTurns) {
       return;
     }
     this.adShownThisRound = true;
@@ -722,7 +734,7 @@ export class BackgammonUI {
   }
 
   resetRoundAdProgress() {
-    this.completedMoveCount = 0;
+    this.completedTurnCount = 0;
     this.adShownThisRound = false;
     this.hideAdCard();
   }
@@ -731,8 +743,8 @@ export class BackgammonUI {
     if (!this.elements.backgammonAdCard) return;
     this.elements.backgammonAdCard.classList.remove("hidden");
     const adToast = this.language === "tr"
-      ? "Kiraathane ilani: Beray Motorlu Araclar"
-      : "Kiraathane ad: Beray Motorlu Araclar";
+      ? "4 tur tamamlandi: Kiraathane sponsor ilani"
+      : "4 turns completed: sponsor ad opened";
     this.showToast(adToast);
   }
 

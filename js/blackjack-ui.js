@@ -227,7 +227,6 @@ export class BlackjackUI {
     const chipSel     = repl("bjChipSelector");
     const clearBtn    = repl("bjClearBetBtn");
     const nextPlyBtn  = repl("bjNextPlayerBtn");
-    const dealBtn     = repl("bjDealBtn");
     const hitBtn      = repl("bjHitBtn");
     const standBtn    = repl("bjStandBtn");
     const doubleBtn   = repl("bjDoubleBtn");
@@ -239,7 +238,6 @@ export class BlackjackUI {
     this.elements.bjChipSelector    = chipSel      || el.bjChipSelector;
     this.elements.bjClearBetBtn     = clearBtn     || el.bjClearBetBtn;
     this.elements.bjNextPlayerBtn   = nextPlyBtn;
-    this.elements.bjDealBtn         = dealBtn      || el.bjDealBtn;
     this.elements.bjHitBtn          = hitBtn       || el.bjHitBtn;
     this.elements.bjStandBtn        = standBtn     || el.bjStandBtn;
     this.elements.bjDoubleBtn       = doubleBtn    || el.bjDoubleBtn;
@@ -274,10 +272,6 @@ export class BlackjackUI {
 
     if (nextPlyBtn) {
       nextPlyBtn.addEventListener("click", () => this._advanceBetting());
-    }
-
-    if (dealBtn) {
-      dealBtn.addEventListener("click", () => this._startRound());
     }
 
     if (hitBtn)    hitBtn.addEventListener("click",    () => this._actionHit());

@@ -68,6 +68,7 @@ const elements = {
   backgammonToast: document.getElementById("backgammonToast"),
   backgammonAdCard: document.getElementById("backgammonAdCard"),
   backgammonAdCloseBtn: document.getElementById("backgammonAdCloseBtn"),
+  backgammonAdContinueBtn: document.getElementById("backgammonAdContinueBtn"),
   backgammonScore: document.getElementById("backgammonScore"),
   backgammonCube: document.getElementById("backgammonCube"),
   backgammonDice: document.getElementById("backgammonDice"),
