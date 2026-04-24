@@ -196,6 +196,54 @@ export class GameSound {
     this.playTone(90, 0.06, 0.3, "sine", 0.05);
   }
 
+  // ─── Blackjack SFX ─────────────────────────────────────────────────────────
+
+  bjShuffle() {
+    // Rapid bursts simulating cards riffling
+    for (let i = 0; i < 8; i++) {
+      const freq = 200 + Math.random() * 400;
+      this.playTone(freq, 0.04, 0.5, "sawtooth", i * 0.04);
+    }
+  }
+
+  bjDeal() {
+    // Crisp friction snap of a card sliding across felt
+    this.playTone(900, 0.03, 0.9, "sawtooth");
+    this.playTone(500, 0.04, 0.6, "triangle", 0.02);
+  }
+
+  bjFlip() {
+    // Soft whoosh of a card flipping
+    this.playTone(440, 0.05, 0.5, "triangle");
+    this.playTone(660, 0.04, 0.4, "sine", 0.04);
+  }
+
+  bjChip() {
+    // Metallic chip click
+    this.playTone(1200, 0.04, 0.7, "triangle");
+    this.playTone(900, 0.06, 0.5, "sine", 0.02);
+  }
+
+  bjWin() {
+    // Uplifting ascending chord
+    this.playChord([523, 659, 784], 0.12, 0.9, "triangle");
+    this.playChord([659, 784, 988], 0.14, 1, "triangle", 0.14);
+  }
+
+  bjLose() {
+    // Descending somber tones
+    this.playTone(392, 0.14, 0.85, "triangle");
+    this.playTone(330, 0.16, 0.8, "triangle", 0.14);
+    this.playTone(262, 0.2, 0.9, "triangle", 0.28);
+  }
+
+  bjBlackjack() {
+    // Special dramatic fanfare
+    this.playChord([784, 988, 1318], 0.1, 1, "triangle");
+    this.playChord([880, 1108, 1318], 0.12, 1, "triangle", 0.12);
+    this.playChord([988, 1244, 1568], 0.18, 1, "triangle", 0.26);
+  }
+
   updateMood(evaluation, sideToMove) {
     const ctx = this.ensureContext();
     if (!ctx || !this.nodes) {

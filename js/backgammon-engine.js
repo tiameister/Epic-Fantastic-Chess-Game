@@ -254,6 +254,7 @@ export class BackgammonEngine {
     if (this.off[this.turn] >= 15) {
       this.winner = this.turn;
       this.movesLeft = [];
+      this.dice = [];
       this.applyWinScore(this.turn);
       return { ok: true, gameOver: true };
     }

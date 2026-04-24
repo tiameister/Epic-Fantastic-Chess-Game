@@ -87,6 +87,21 @@ function testUndoRestoresState() {
   assert(e.turn === initialTurn, "Undo should restore turn");
 }
 
+function testWinningMoveClearsDiceState() {
+  const e = new BackgammonEngine();
+  e.points = Array(25).fill(0);
+  e.turn = "white";
+  e.off.white = 14;
+  e.points[1] = 1;
+  e.dice = [1, 2];
+  e.movesLeft = [1, 2];
+  const result = e.move(1, "off");
+  assert(result.ok && result.gameOver, "Winning bear-off should finish game");
+  assert(e.winner === "white", "White should be winner");
+  assert(e.movesLeft.length === 0, "Moves should be cleared at game end");
+  assert(e.dice.length === 0, "Dice should be cleared at game end");
+}
+
 function run() {
   testDoubleOfferFlow();
   testDoubleRejectAwardsPoints();
@@ -95,6 +110,7 @@ function run() {
   testCanBearOffStrictCount();
   testHigherDieBearOffRule();
   testUndoRestoresState();
+  testWinningMoveClearsDiceState();
   console.log("Backgammon tests passed.");
 }
 

@@ -18,225 +18,251 @@
       <p class="chooser-note">Local, polished board games with quick switching and rich UX.</p>
     </div>
   </section>
+
   <main class="app-shell">
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  CHESS                                                              -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
     <section id="chessCard" class="game-card hidden">
       <header class="topbar">
         <h1>Royal Chess</h1>
-        <p>Local 2-player game on one screen - by Taha Ilter Akar</p>
+        <p>Local 2-player game on one screen — by Taha Ilter Akar</p>
       </header>
 
       <nav class="view-tabs" aria-label="Primary views">
-        <button id="tabGameBtn" type="button" class="tab-btn active" data-tab-target="game">Game</button>
-        <button id="tabAnalysisBtn" type="button" class="tab-btn" data-tab-target="analysis">Analysis</button>
-        <button id="tabProfileBtn" type="button" class="tab-btn" data-tab-target="profile">Profile</button>
-        <button id="tabQuestsBtn" type="button" class="tab-btn" data-tab-target="quests">Quests</button>
+        <button id="tabGameBtn"      type="button" class="tab-btn active" data-tab-target="game">Game</button>
+        <button id="tabAnalysisBtn"  type="button" class="tab-btn" data-tab-target="analysis">Analysis</button>
+        <button id="tabProfileBtn"   type="button" class="tab-btn" data-tab-target="profile">Profile</button>
+        <button id="tabQuestsBtn"    type="button" class="tab-btn" data-tab-target="quests">Quests</button>
       </nav>
 
+      <!-- Profile tab ──────────────────────────────────────────────────── -->
       <section class="profile-panel tab-section" data-tab-section="profile">
-        <div class="profile-item">
-          <span class="label">Level</span>
-          <strong id="profileLevel">1</strong>
-        </div>
-        <div class="profile-item">
-          <span class="label">XP</span>
-          <strong id="profileXp">0 / 100</strong>
-        </div>
-        <div class="profile-item">
-          <span class="label">Matches</span>
-          <strong id="profileMatches">0</strong>
-        </div>
-        <div class="profile-item">
-          <span class="label">Win Rate</span>
-          <strong id="profileWinrate">0%</strong>
-        </div>
-        <div class="profile-item">
-          <span class="label">Avg Accuracy</span>
-          <strong id="profileAccuracy">0%</strong>
-        </div>
-        <div class="profile-item">
-          <span class="label">Best Puzzle Streak</span>
-          <strong id="profileBestStreak">0</strong>
-        </div>
+        <div class="profile-item"><span class="label">Level</span><strong id="profileLevel">1</strong></div>
+        <div class="profile-item"><span class="label">XP</span><strong id="profileXp">0 / 100</strong></div>
+        <div class="profile-item"><span class="label">Matches</span><strong id="profileMatches">0</strong></div>
+        <div class="profile-item"><span class="label">Win Rate</span><strong id="profileWinrate">0%</strong></div>
+        <div class="profile-item"><span class="label">Avg Accuracy</span><strong id="profileAccuracy">0%</strong></div>
+        <div class="profile-item"><span class="label">Best Puzzle Streak</span><strong id="profileBestStreak">0</strong></div>
       </section>
-
       <section class="profile-tools tab-section" data-tab-section="profile">
         <button id="exportProfileBtn" type="button">Export Profile JSON</button>
         <button id="importProfileBtn" type="button">Import Profile JSON</button>
         <input id="importProfileInput" type="file" accept="application/json" class="hidden">
       </section>
 
+      <!-- Quests tab ───────────────────────────────────────────────────── -->
       <section class="meta-panel tab-section" data-tab-section="quests">
-        <div class="meta-card">
-          <h3>Achievements</h3>
-          <ul id="achievementsList" class="meta-list"></ul>
-        </div>
-        <div class="meta-card">
-          <h3>Quests</h3>
-          <ul id="questsList" class="meta-list"></ul>
-        </div>
+        <div class="meta-card"><h3>Achievements</h3><ul id="achievementsList" class="meta-list"></ul></div>
+        <div class="meta-card"><h3>Quests</h3><ul id="questsList" class="meta-list"></ul></div>
       </section>
 
-      <section class="board-stage tab-section" data-tab-section="game">
-        <section id="evalPanel" class="eval-panel side">
-          <div class="eval-track-vertical" aria-hidden="true">
-            <div id="evalFill" class="eval-fill-vertical"></div>
+      <!-- Game tab — focused two-column layout ─────────────────────────── -->
+      <div class="chess-game-layout tab-section" data-tab-section="game">
+
+        <!-- Left: hero board + player cards ──────────────────────────── -->
+        <div class="chess-main">
+
+          <!-- Opponent (Black) card -->
+          <div class="chess-player chess-player-top" id="blackPlayerCard">
+            <div class="chess-player-clock-wrap">
+              <strong id="blackTimeLabel" class="chess-clock-display">∞</strong>
+            </div>
+            <div class="chess-player-info">
+              <span class="chess-avatar" aria-hidden="true">♚</span>
+              <span class="chess-player-name">Black</span>
+              <div class="chess-captured-tray" id="blackCaptured" aria-label="Pieces captured by Black"></div>
+              <span class="chess-material-adv" id="blackAdvantage"></span>
+            </div>
           </div>
-          <div id="evalText" class="eval-text">Evaluation: 0.00 (equal)</div>
-        </section>
-        <section id="boardFrame" class="board-wrap fancy-frame">
-          <div id="board" class="board" aria-label="Chess board"></div>
-          <div id="particleLayer" class="particle-layer" aria-hidden="true"></div>
-        </section>
-      </section>
 
-      <footer class="actions primary-actions tab-section" data-tab-section="game">
-        <button id="resetBtn" type="button" aria-label="Start a new game">New Game</button>
-        <button id="undoBtn" type="button" aria-label="Undo last move">Undo Move</button>
-        <button id="flipBtn" type="button" aria-label="Flip board orientation">Flip Board</button>
-        <button id="pauseClockBtn" type="button" aria-label="Pause or resume clock">Pause Clock</button>
-        <button id="offerDrawBtn" type="button" aria-label="Offer draw in local mode">Offer Draw</button>
-        <button id="resignBtn" type="button" aria-label="Resign current game">Resign</button>
-        <button id="rematchBtn" type="button" aria-label="Start rematch">Rematch</button>
-      </footer>
+          <!-- Board: optional eval bar + board frame -->
+          <div class="chess-board-area">
+            <section id="evalPanel" class="eval-panel side hidden">
+              <div class="eval-track-vertical" aria-hidden="true">
+                <div id="evalFill" class="eval-fill-vertical"></div>
+              </div>
+              <div id="evalText" class="eval-text">0.00</div>
+            </section>
+            <section id="boardFrame" class="board-wrap fancy-frame">
+              <div id="board" class="board" aria-label="Chess board"></div>
+              <div id="particleLayer" class="particle-layer" aria-hidden="true"></div>
+            </section>
+          </div>
 
-      <section class="status-panel tab-section" data-tab-section="game">
-        <div class="status-item">
-          <span class="label">Turn</span>
-          <strong id="turnLabel">White</strong>
-        </div>
-        <div class="status-item">
-          <span class="label">Active Side</span>
-          <strong id="activeSideBadge" class="turn-badge white">White to move</strong>
-        </div>
-        <div class="status-item">
-          <span class="label">State</span>
-          <strong id="stateLabel">In Progress</strong>
-        </div>
-        <div class="status-item">
-          <span class="label">Move Quality</span>
-          <strong id="moveQualityLabel">Neutral</strong>
-        </div>
-        <div class="status-item message-wrap">
-          <span class="label">Message</span>
-          <strong id="messageLabel">Select a piece to begin.</strong>
-        </div>
-        <div class="status-item">
-          <span class="label">White Time</span>
-          <strong id="whiteTimeLabel">10:00</strong>
-        </div>
-        <div class="status-item">
-          <span class="label">Black Time</span>
-          <strong id="blackTimeLabel">10:00</strong>
-        </div>
-      </section>
+          <!-- Active player (White) card -->
+          <div class="chess-player chess-player-bottom" id="whitePlayerCard">
+            <div class="chess-player-info">
+              <span class="chess-avatar" aria-hidden="true">♔</span>
+              <span class="chess-player-name">White</span>
+              <div class="chess-captured-tray" id="whiteCaptured" aria-label="Pieces captured by White"></div>
+              <span class="chess-material-adv" id="whiteAdvantage"></span>
+            </div>
+            <div class="chess-player-clock-wrap">
+              <strong id="whiteTimeLabel" class="chess-clock-display">∞</strong>
+            </div>
+          </div>
 
-      <details class="advanced-controls">
-        <summary>Game Settings</summary>
-        <section class="actions settings-grid">
-          <label for="presetSelect">
-            Preset
-            <select id="presetSelect">
-              <option value="standard" selected>Standard Start</option>
-              <option value="italian">Italian Game</option>
-              <option value="sicilian">Sicilian Defense</option>
-              <option value="endgame">King + Pawns Endgame</option>
-            </select>
-          </label>
-          <label for="timeControl">
-            Time
-            <select id="timeControl">
-              <option value="0|0">No Clock</option>
-              <option value="60|0|0">Bullet 1+0</option>
-              <option value="120|1|0">Bullet 2+1</option>
-              <option value="180|2|0">Blitz 3+2</option>
-              <option value="300|0|0">Blitz 5+0</option>
-              <option value="600|0|0" selected>Rapid 10+0</option>
-              <option value="900|10|0">Rapid 15+10</option>
-              <option value="1800|0|2">Classical 30+0 d2</option>
-              <option value="2700|15|0">Classical 45+15</option>
-            </select>
-          </label>
-          <label for="themeSelect">
-            Theme
-            <select id="themeSelect">
-              <option value="obsidian" selected>Obsidian Fantasy</option>
-              <option value="default">Modern Slate</option>
-              <option value="marble">Classic Marble</option>
-              <option value="wood">Tournament Wood</option>
-              <option value="emerald">Emerald Club</option>
-            </select>
-          </label>
-          <label class="switch-row" for="autoFlipToggle">
-            Auto Flip
-            <input id="autoFlipToggle" type="checkbox">
-          </label>
-          <label for="layoutPreset">
-            Layout
-            <select id="layoutPreset">
-              <option value="default" selected>Default</option>
-              <option value="focus">Focus Mode</option>
-              <option value="analysis">Analysis Mode</option>
-              <option value="training">Training Mode</option>
-            </select>
-          </label>
-          <button id="toggleEvalBtn" type="button">Hide Eval</button>
-        </section>
-      </details>
+          <!-- Single dynamic narrative status bar -->
+          <div class="chess-narrative" id="chessNarrative" aria-live="polite">
+            White to move · Select a piece
+          </div>
 
-      <section class="history-panel tab-section" data-tab-section="game">
-        <h2>Move History</h2>
-        <div class="history-controls">
-          <button id="exportPgnBtn" type="button">Export PGN</button>
-          <button id="importPgnBtn" type="button">Import PGN</button>
-          <button id="continueLastBtn" type="button">Continue Last Game</button>
-          <input id="importPgnInput" type="file" accept=".pgn,text/plain" class="hidden">
-        </div>
-        <div class="history-controls">
-          <button id="historyStartBtn" type="button">|&lt;</button>
-          <button id="historyPrevBtn" type="button">&lt;</button>
-          <button id="historyNextBtn" type="button">&gt;</button>
-          <button id="historyEndBtn" type="button">&gt;|</button>
-        </div>
-        <ol id="historyList"></ol>
-      </section>
+        </div><!-- /.chess-main -->
 
+        <!-- Right: sidebar — analysis, history, actions ──────────────── -->
+        <div class="chess-sidebar">
+
+          <!-- Zen Switch: Analysis Mode toggle -->
+          <div class="sidebar-section zen-toggle-row">
+            <span class="zen-label">Analysis Mode</span>
+            <label class="zen-switch" title="Reveal eval bar, move quality &amp; color-coded notation">
+              <input type="checkbox" id="analysisModeToggle">
+              <span class="zen-track"></span>
+            </label>
+          </div>
+
+          <!-- Analysis metrics (shown only when Analysis Mode is ON) -->
+          <div class="sidebar-section analysis-only">
+            <div class="analysis-metric">
+              <span class="analysis-metric-label">Evaluation</span>
+              <span id="evalSidebarScore" class="analysis-score">Equal</span>
+            </div>
+            <div class="analysis-metric">
+              <span class="analysis-metric-label">Move Quality</span>
+              <strong id="moveQualityLabel" class="quality-label neutral">Neutral</strong>
+            </div>
+          </div>
+
+          <!-- Move history (always visible in sidebar) -->
+          <div class="sidebar-section sidebar-history">
+            <div class="sidebar-section-header">
+              <h3 class="sidebar-title">Moves</h3>
+              <div class="history-nav-inline">
+                <button id="historyStartBtn" type="button" title="First move">⏮</button>
+                <button id="historyPrevBtn"  type="button" title="Previous">◀</button>
+                <button id="historyNextBtn"  type="button" title="Next">▶</button>
+                <button id="historyEndBtn"   type="button" title="Last move">⏭</button>
+              </div>
+            </div>
+            <ol id="historyList" class="history-list"></ol>
+            <div class="pgn-row">
+              <button id="exportPgnBtn"    type="button">PGN ↓</button>
+              <button id="importPgnBtn"    type="button">PGN ↑</button>
+              <button id="continueLastBtn" type="button">Continue</button>
+              <input id="importPgnInput" type="file" accept=".pgn,text/plain" class="hidden">
+            </div>
+          </div>
+
+          <!-- Action buttons -->
+          <div class="sidebar-section sidebar-actions">
+            <button id="resetBtn"      type="button">New Game</button>
+            <button id="undoBtn"       type="button">Undo</button>
+            <button id="resignBtn"     type="button">Resign</button>
+            <button id="offerDrawBtn"  type="button">Draw</button>
+            <button id="rematchBtn"    type="button">Rematch</button>
+            <button id="flipBtn"       type="button">Flip</button>
+            <button id="pauseClockBtn" type="button">Pause</button>
+            <button id="toggleEvalBtn" type="button">Eval</button>
+          </div>
+
+          <!-- Collapsible settings -->
+          <details class="advanced-controls sidebar-settings">
+            <summary>Settings</summary>
+            <div class="settings-grid">
+              <label for="presetSelect">Preset
+                <select id="presetSelect">
+                  <option value="standard" selected>Standard</option>
+                  <option value="italian">Italian</option>
+                  <option value="sicilian">Sicilian</option>
+                  <option value="endgame">K+P Endgame</option>
+                </select>
+              </label>
+              <label for="timeControl">Time
+                <select id="timeControl">
+                  <option value="0|0">No Clock</option>
+                  <option value="60|0|0">Bullet 1+0</option>
+                  <option value="120|1|0">Bullet 2+1</option>
+                  <option value="180|2|0">Blitz 3+2</option>
+                  <option value="300|0|0">Blitz 5+0</option>
+                  <option value="600|0|0" selected>Rapid 10+0</option>
+                  <option value="900|10|0">Rapid 15+10</option>
+                  <option value="1800|0|2">Classical 30+0</option>
+                  <option value="2700|15|0">Classical 45+15</option>
+                </select>
+              </label>
+              <label for="themeSelect">Theme
+                <select id="themeSelect">
+                  <option value="obsidian" selected>Obsidian</option>
+                  <option value="default">Modern Slate</option>
+                  <option value="marble">Marble</option>
+                  <option value="wood">Wood</option>
+                  <option value="emerald">Emerald</option>
+                </select>
+              </label>
+              <label class="switch-row" for="autoFlipToggle">Auto Flip
+                <input id="autoFlipToggle" type="checkbox">
+              </label>
+              <label for="layoutPreset">Layout
+                <select id="layoutPreset">
+                  <option value="default" selected>Default</option>
+                  <option value="focus">Focus</option>
+                  <option value="analysis">Analysis</option>
+                  <option value="training">Training</option>
+                </select>
+              </label>
+            </div>
+          </details>
+
+        </div><!-- /.chess-sidebar -->
+
+        <!-- Backward-compat holders: JS still writes to these IDs -->
+        <div class="visually-hidden" aria-hidden="true">
+          <strong id="turnLabel"></strong>
+          <strong id="activeSideBadge" class="turn-badge white"></strong>
+          <strong id="stateLabel"></strong>
+          <strong id="messageLabel"></strong>
+        </div>
+
+      </div><!-- /.chess-game-layout -->
+
+      <!-- Analysis tab ─────────────────────────────────────────────────── -->
       <section class="saved-games-panel tab-section" data-tab-section="analysis">
         <h2>Saved Games</h2>
         <input id="savedGamesSearch" type="text" placeholder="Search result, reason, moves">
         <ul id="savedGamesList" class="review-list"></ul>
       </section>
-
       <section class="analysis-panel tab-section" data-tab-section="analysis">
-        <h2>Analysis & Review</h2>
-        <label for="analysisScrubber">
-          Position Scrubber
+        <h2>Analysis &amp; Review</h2>
+        <label for="analysisScrubber">Position Scrubber
           <input id="analysisScrubber" type="range" min="0" max="0" value="0">
         </label>
         <canvas id="evalGraph" width="900" height="180" aria-label="Evaluation graph"></canvas>
         <ul id="reviewList" class="review-list"></ul>
       </section>
 
+      <!-- Training tab ─────────────────────────────────────────────────── -->
       <section class="training-panel tab-section" data-tab-section="quests">
         <h2>Training</h2>
         <div class="training-actions">
-          <button id="trainingOffBtn" type="button">Training Off</button>
+          <button id="trainingOffBtn"    type="button">Training Off</button>
           <button id="openingTrainerBtn" type="button">Opening Trainer</button>
-          <button id="puzzleModeBtn" type="button">Puzzle Mode</button>
-          <button id="endgameDrillBtn" type="button">Endgame Drill</button>
+          <button id="puzzleModeBtn"     type="button">Puzzle Mode</button>
+          <button id="endgameDrillBtn"   type="button">Endgame Drill</button>
         </div>
         <p id="trainingStatusText">Training mode is currently off.</p>
         <p id="trainingStreakText">Puzzle Streak: 0</p>
         <button id="nextTrainingBtn" type="button">Next Training Position</button>
       </section>
 
-      <!-- Legacy game-over panel kept for backward compat; rich overlay is created by GameFeel -->
+      <!-- Legacy game-over (GameFeel rich overlay supersedes this) -->
       <section id="gameOverPanel" class="game-over-panel hidden" aria-live="polite">
         <h2 id="gameOverTitle">Game Over</h2>
         <p id="gameOverText">Result</p>
         <button id="playAgainBtn" type="button">Play Again</button>
       </section>
 
-      <!-- Chess toast mount (GameFeel creates this dynamically; element reserved) -->
       <div id="chessToastAnchor" aria-live="assertive" aria-atomic="true"></div>
 
       <section id="promotionModal" class="promotion-modal hidden" aria-live="polite">
@@ -246,6 +272,10 @@
         </div>
       </section>
     </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  BACKGAMMON                                                         -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
     <section id="backgammonCard" class="game-card hidden">
       <header class="topbar">
         <h1>Royal Backgammon</h1>
@@ -254,45 +284,42 @@
       <details class="advanced-controls backgammon-settings">
         <summary>Tavla Settings</summary>
         <section class="actions settings-grid">
-          <label for="backgammonLangToggle">
-            Language
+          <label for="backgammonLangToggle">Language
             <select id="backgammonLangToggle">
               <option value="en" selected>English</option>
               <option value="tr">Turkce</option>
             </select>
           </label>
-          <label class="switch-row" for="backgammonDoublingToggle">
-            Doubling Cube (Optional)
+          <label class="switch-row" for="backgammonDoublingToggle">Doubling Cube (Optional)
             <input id="backgammonDoublingToggle" type="checkbox">
           </label>
-          <label class="switch-row" for="backgammonCheatWhiteToggle">
-            Cheat Mode (White loaded dice)
+          <label class="switch-row" for="backgammonCheatWhiteToggle">Cheat Mode (White loaded dice)
             <input id="backgammonCheatWhiteToggle" type="checkbox">
           </label>
         </section>
       </details>
       <section class="actions">
-        <button id="backgammonRollBtn" type="button">Roll Dice</button>
-        <button id="backgammonUndoBtn" type="button">Undo</button>
-        <button id="backgammonDoubleBtn" type="button">Offer Double</button>
+        <button id="backgammonRollBtn"        type="button">Roll Dice</button>
+        <button id="backgammonUndoBtn"        type="button">Undo</button>
+        <button id="backgammonDoubleBtn"      type="button">Offer Double</button>
         <button id="backgammonAcceptDoubleBtn" type="button">Accept Double</button>
         <button id="backgammonRejectDoubleBtn" type="button">Reject Double</button>
-        <button id="backgammonResetBtn" type="button">Reset Game</button>
-        <button id="backToChooserBtn" type="button">Back to Menu</button>
+        <button id="backgammonResetBtn"       type="button">Reset Game</button>
+        <button id="backToChooserBtn"         type="button">Back to Menu</button>
       </section>
       <section class="backgammon-hud">
-        <p id="backgammonStatus" class="label brass-plate">white to move.</p>
-        <p id="backgammonScore" class="label brass-plate"></p>
-        <p id="backgammonCube" class="label brass-plate"></p>
-        <p id="backgammonBar" class="label brass-plate"></p>
-        <p id="backgammonOff" class="label brass-plate"></p>
+        <p id="backgammonStatus"  class="label brass-plate">white to move.</p>
+        <p id="backgammonScore"   class="label brass-plate"></p>
+        <p id="backgammonCube"    class="label brass-plate"></p>
+        <p id="backgammonBar"     class="label brass-plate"></p>
+        <p id="backgammonOff"     class="label brass-plate"></p>
         <p id="backgammonCallout" class="label"></p>
       </section>
       <section id="backgammonDice" class="backgammon-dice" title="Click dice area to roll"></section>
       <div id="backgammonToast" class="backgammon-toast" aria-live="polite"></div>
       <section id="backgammonBoard" class="backgammon-board"></section>
       <ul id="backgammonHints" class="meta-list hidden"></ul>
-      <!-- Backgammon victory — rich overlay created by GameFeel; legacy IDs kept for fallback -->
+      <!-- Backgammon victory — rich overlay from GameFeel; legacy IDs kept for fallback -->
       <section id="backgammonGameOverModal" class="promotion-modal hidden" aria-live="polite">
         <div class="promotion-card backgammon-victory-card">
           <h3 id="backgammonGameOverTitle">Game Over</h3>
@@ -302,9 +329,10 @@
         </div>
       </section>
     </section>
-  </main>
-  <p class="app-owner-mark">Created by Taha Ilter Akar</p>
 
+  </main>
+
+  <p class="app-owner-mark">Created by Taha Ilter Akar</p>
   <script type="module" src="./js/app.js"></script>
 </body>
 </html>

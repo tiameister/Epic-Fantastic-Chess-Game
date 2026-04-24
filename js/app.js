@@ -3,6 +3,8 @@ import { ChessUI } from "./ui.js";
 import { GameSound } from "./sound.js";
 import { BackgammonEngine } from "./backgammon-engine.js";
 import { BackgammonUI } from "./backgammon-ui.js";
+import { BlackjackEngine } from "./blackjack-engine.js";
+import { BlackjackUI } from "./blackjack-ui.js";
 import { ProgressionSystem } from "./systems/progression-system.js";
 import { EvaluationAdapter } from "./engine/evaluator.js";
 import { TrainingSystem } from "./training/training-system.js";
@@ -13,9 +15,37 @@ const elements = {
   gameChooser: document.getElementById("gameChooser"),
   chooseChessBtn: document.getElementById("chooseChessBtn"),
   chooseBackgammonBtn: document.getElementById("chooseBackgammonBtn"),
+  chooseBlackjackBtn: document.getElementById("chooseBlackjackBtn"),
   chessCard: document.getElementById("chessCard"),
   backgammonCard: document.getElementById("backgammonCard"),
+  blackjackCard: document.getElementById("blackjackCard"),
   backToChooserBtn: document.getElementById("backToChooserBtn"),
+  // ── Blackjack elements ────────────────────────────────────────────────────
+  bjShoe: document.getElementById("bjShoe"),
+  bjShoeIndicator: document.getElementById("bjShoeIndicator"),
+  bjDealerHand: document.getElementById("bjDealerHand"),
+  bjDealerValue: document.getElementById("bjDealerValue"),
+  bjPlayerHandWrapper: document.getElementById("bjPlayerHandWrapper"),
+  bjChipsDisplay: document.getElementById("bjChipsDisplay"),
+  bjBetAmount: document.getElementById("bjBetAmount"),
+  bjBalance: document.getElementById("bjBalance"),
+  bjChipSelector: document.getElementById("bjChipSelector"),
+  bjBettingControls: document.getElementById("bjBettingControls"),
+  bjActionControls: document.getElementById("bjActionControls"),
+  bjClearBetBtn: document.getElementById("bjClearBetBtn"),
+  bjDealBtn: document.getElementById("bjDealBtn"),
+  bjHitBtn: document.getElementById("bjHitBtn"),
+  bjStandBtn: document.getElementById("bjStandBtn"),
+  bjDoubleBtn: document.getElementById("bjDoubleBtn"),
+  bjSplitBtn: document.getElementById("bjSplitBtn"),
+  bjStatus: document.getElementById("bjStatus"),
+  bjOutcomeOverlay: document.getElementById("bjOutcomeOverlay"),
+  bjOutcomeTitle: document.getElementById("bjOutcomeTitle"),
+  bjOutcomeDetail: document.getElementById("bjOutcomeDetail"),
+  bjNextRoundBtn: document.getElementById("bjNextRoundBtn"),
+  bjBackToChooserBtn: document.getElementById("bjBackToChooserBtn"),
+  bjNewShoeBtn: document.getElementById("bjNewShoeBtn"),
+  bjConfettiCanvas: document.getElementById("bjConfettiCanvas"),
   backgammonRollBtn: document.getElementById("backgammonRollBtn"),
   backgammonUndoBtn: document.getElementById("backgammonUndoBtn"),
   backgammonLangToggle: document.getElementById("backgammonLangToggle"),
@@ -119,35 +149,56 @@ const storage = new GameStorage();
 const ui = new ChessUI(engine, elements, sound, progression, evaluator, training, storage);
 const backgammonEngine = new BackgammonEngine();
 const backgammonUI = new BackgammonUI(backgammonEngine, elements);
+const blackjackEngine = new BlackjackEngine();
+const blackjackUI = new BlackjackUI(blackjackEngine, elements, sound);
 ui.init();
 backgammonUI.init();
+blackjackUI.init();
 
 function showChooser() {
   elements.gameChooser.classList.remove("hidden");
   elements.chessCard.classList.add("hidden");
   elements.backgammonCard.classList.add("hidden");
+  elements.blackjackCard.classList.add("hidden");
   backgammonUI.setActive(false);
+  blackjackUI.setActive(false);
 }
 
 function showChess() {
   elements.gameChooser.classList.add("hidden");
   elements.backgammonCard.classList.add("hidden");
+  elements.blackjackCard.classList.add("hidden");
   elements.chessCard.classList.remove("hidden");
   backgammonUI.setActive(false);
+  blackjackUI.setActive(false);
   showMatchSplash("Royal Chess", "Local Two-Player");
 }
 
 function showBackgammon() {
   elements.gameChooser.classList.add("hidden");
   elements.chessCard.classList.add("hidden");
+  elements.blackjackCard.classList.add("hidden");
   elements.backgammonCard.classList.remove("hidden");
   backgammonUI.setActive(true);
+  blackjackUI.setActive(false);
   backgammonUI.render();
   showMatchSplash("Royal Backgammon", "Turkish Tavla");
 }
 
+function showBlackjack() {
+  elements.gameChooser.classList.add("hidden");
+  elements.chessCard.classList.add("hidden");
+  elements.backgammonCard.classList.add("hidden");
+  elements.blackjackCard.classList.remove("hidden");
+  backgammonUI.setActive(false);
+  blackjackUI.setActive(true);
+  showMatchSplash("Royal 21", "Six-Deck Blackjack");
+}
+
 elements.chooseChessBtn.addEventListener("click", showChess);
 elements.chooseBackgammonBtn.addEventListener("click", showBackgammon);
+elements.chooseBlackjackBtn.addEventListener("click", showBlackjack);
 elements.backToChooserBtn.addEventListener("click", showChooser);
+elements.bjBackToChooserBtn.addEventListener("click", showChooser);
 
 showChooser();

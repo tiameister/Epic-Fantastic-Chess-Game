@@ -1,4 +1,5 @@
-import { DiceAnimator } from "./ui/dice-animator.js";
+import { DiceAnimator }   from "./ui/dice-animator.js";
+import { MoveManager }    from "./ui/move-manager.js";
 import { showBackgammonVictory, hideBackgammonVictory, showChessToast } from "./ui/game-feel.js";
 
 export class BackgammonUI {
@@ -17,11 +18,17 @@ export class BackgammonUI {
     this.offSlotWhite = null;
     this.offSlotBlack = null;
 
+    // Move manager — deterministic pathfinder (no heuristics)
+    this.moveManager        = new MoveManager(engine);
+    // UI interaction state
+    this._destinations      = null;  // Map<dest, PathInfo> when a checker is selected
+    this._isExecuting       = false; // true while animating a multi-step path
+
     // 3-D dice — the animator is re-targeted to the bar container on each board render
-    this.diceAnimator    = new DiceAnimator(elements.backgammonDice);
-    this._diceCount      = 0;
-    this._barDiceEl      = null;   // div inside the bar that holds the 3D dice
-    this._pendingSnapTarget = null; // point index where the last one-click move landed
+    this.diceAnimator       = new DiceAnimator(elements.backgammonDice);
+    this._diceCount         = 0;
+    this._barDiceEl         = null;  // div inside the bar that holds the 3D dice
+    this._pendingSnapTarget = null;  // point index where the last move landed
   }
 
   init() {
@@ -31,7 +38,8 @@ export class BackgammonUI {
       if (!ok) {
         this.showToast(this.language === "tr" ? "Geri alınacak hamle yok" : "No move to undo");
       }
-      this.selectedFrom = null;
+      this._deselect();
+      this._isExecuting = false;
       this.hideGameOverModal();
       this.render();
     });
@@ -64,13 +72,15 @@ export class BackgammonUI {
       }
       this.lastWinAnnounced = "";
       this.engine.setDoublingEnabled(this.elements.backgammonDoublingToggle.checked);
-      this.selectedFrom = null;
+      this._deselect();
+      this._isExecuting = false;
       this.hideGameOverModal();
       this.render();
     });
     this.elements.backgammonNewRoundBtn.addEventListener("click", () => {
       this.engine.startNextGame();
-      this.selectedFrom = null;
+      this._deselect();
+      this._isExecuting = false;
       this.hideGameOverModal();
       this.render();
     });
@@ -106,100 +116,142 @@ export class BackgammonUI {
     }
   }
 
+  // ─── Click interaction — Validated Intent System ──────────────────────────
+
   handlePointClick(from) {
-    if (!this.active || this.engine.winner) return;
+    if (!this.active || this.engine.winner || this._isExecuting) return;
     if (this.engine.doubleOfferedBy) return;
     if (this.engine.movesLeft.length === 0) return;
 
-    // If a different piece is already selected, try a manual move first
-    // (preserves the two-click flow as a deliberate override)
-    if (this.selectedFrom !== null && this.selectedFrom !== from) {
-      const result = this.engine.move(this.selectedFrom, from);
-      if (result.ok) {
-        this._onMoveExecuted(this.selectedFrom, from, true);
-        this.selectedFrom = null;
-        return;
-      }
-      // Magnetic snap fallback
-      const snapped = this.getMagneticDestination(this.selectedFrom, from);
-      if (snapped !== null) {
-        const snapResult = this.engine.move(this.selectedFrom, snapped);
-        if (snapResult.ok) {
-          this._onMoveExecuted(this.selectedFrom, snapped, true);
-          this.selectedFrom = null;
-          return;
-        }
-      }
-      // If the click was on another selectable checker, switch selection
-      if (this.hasSelectableChecker(from)) {
-        this.selectedFrom = from;
-        this.render();
-        return;
-      }
-      this.selectedFrom = null;
-      this.render();
-      return;
-    }
-
-    // Deselect on re-click
+    // Re-click selected piece → deselect
     if (this.selectedFrom === from) {
-      this.selectedFrom = null;
-      this.render();
+      this._deselect();
       return;
     }
 
-    // ── ONE-CLICK QUICK MOVE ─────────────────────────────────
-    if (!this.hasSelectableChecker(from)) return;
+    // A piece is already selected
+    if (this.selectedFrom !== null && this._destinations) {
+      const pathInfo = this._destinations.get(from);
 
-    const legal = this.engine.getLegalMoves().filter((m) => m.from === from);
-    if (legal.length === 0) {
-      this._shakePoint(from);
+      if (pathInfo) {
+        // Clicked a highlighted destination → execute the validated path
+        this._executeDestination(from, pathInfo);
+        return;
+      }
+
+      // Clicked something else — try switching selection to another own checker
+      if (this.hasSelectableChecker(from)) {
+        this._selectChecker(from);
+        return;
+      }
+
+      // Clicked an invalid point while something was selected → deselect
+      this._deselect();
       return;
     }
 
-    // Pick the move that uses the first die in the queue;
-    // fall back to the next available die if that one doesn't reach this checker.
-    const move = this._pickFirstDieMove(legal);
-    if (!move) {
-      this._shakePoint(from);
+    // Nothing selected — try to select a checker at `from`
+    if (!this.hasSelectableChecker(from)) {
+      this._shakeFrom(from);
       return;
     }
 
-    const result = this.engine.move(from, move.to);
-    if (result.ok) {
-      this._onMoveExecuted(from, move.to, true);
-      this.selectedFrom = null;
-    } else {
-      // Should not happen — legal was filtered, but guard just in case
-      this._shakePoint(from);
-      this.render();
-    }
+    this._selectChecker(from);
   }
 
-  /** Pick the move that uses movesLeft[0]; fall back to any legal move. */
-  _pickFirstDieMove(legal) {
-    if (!this.engine.movesLeft.length) return null;
-    const firstDie = this.engine.movesLeft[0];
-    return legal.find((m) => m.die === firstDie) ?? legal[0] ?? null;
-  }
+  /**
+   * Stage 1: Select a checker and compute all reachable destinations.
+   * Auto-executes immediately when there is exactly one legal destination.
+   */
+  _selectChecker(from) {
+    this.selectedFrom   = from;
+    this._destinations  = this.moveManager.getDestinations(from);
 
-  /** Called after a successful engine.move() — plays SFX, animates, re-renders. */
-  _onMoveExecuted(from, to, isOneClick = false) {
+    if (this._destinations.size === 0) {
+      // Should not happen (hasSelectableChecker guards this) but be defensive.
+      this._shakeFrom(from);
+      this._deselect();
+      return;
+    }
+
+    if (this._destinations.size === 1) {
+      // Exactly one legal landing — auto-execute, no second click needed.
+      const [dest, pathInfo] = [...this._destinations.entries()][0];
+      this._executeDestination(dest, pathInfo);
+      return;
+    }
+
+    // Multiple destinations → highlight them and wait for the second click.
     this.playCheckerSfx();
-    if (isOneClick) {
-      // Queue the snap animation class on the landing checker after render
-      this._pendingSnapTarget = to;
-    }
     this.render();
   }
 
-  /** Shake all checkers on the given point to signal an invalid move. */
-  _shakePoint(from) {
+  /** Clear selection state and re-render. */
+  _deselect() {
+    this.selectedFrom  = null;
+    this._destinations = null;
+    this.render();
+  }
+
+  /** Stage 2: Execute the pre-validated path for the chosen destination. */
+  _executeDestination(dest, pathInfo) {
+    void this._executePathWithAnimation(pathInfo.steps);
+  }
+
+  /**
+   * Execute a sequence of single-die engine moves with a brief animation
+   * pause between steps so multi-hop moves are visually transparent.
+   *
+   * Each step delegates to engine.move() — the engine remains the authority.
+   * If a step is unexpectedly rejected the move is aborted and the selection
+   * is cleared.
+   */
+  async _executePathWithAnimation(steps) {
+    this._isExecuting  = true;
+    const originFrom   = steps[0].from;
+
+    // Clear selection before the first render so highlights disappear
+    this.selectedFrom  = null;
+    this._destinations = null;
+
+    for (let i = 0; i < steps.length; i++) {
+      const step   = steps[i];
+      const result = this.engine.move(step.from, step.to);
+
+      if (!result.ok) {
+        // Path pre-validation missed something — shake the origin and abort.
+        this._isExecuting = false;
+        this._shakeFrom(originFrom);
+        this.render();
+        return;
+      }
+
+      // Queue the snap/land animation on the destination checker
+      this._pendingSnapTarget = typeof step.to === "number" ? step.to : null;
+      this.render();
+      this.playCheckerSfx();
+
+      if (result.gameOver) break;
+
+      // Pause between steps so the intermediate landing is visible
+      if (i < steps.length - 1) {
+        await new Promise(r => setTimeout(r, 230));
+      }
+    }
+
+    this._isExecuting = false;
+  }
+
+  /**
+   * Shake checkers at `from` to signal an illegal / empty click.
+   * Uses the cached pointElements map for O(1) DOM lookup.
+   */
+  _shakeFrom(from) {
     const pointEl = this.pointElements.get(from);
     if (!pointEl) return;
-    pointEl.querySelectorAll(".bg-checker").forEach((c) => {
+    pointEl.querySelectorAll(".bg-checker").forEach(c => {
       c.classList.remove("shake");
-      void c.offsetWidth;
+      void c.offsetWidth; // force reflow to restart animation
       c.classList.add("shake");
       c.addEventListener("animationend", () => c.classList.remove("shake"), { once: true });
     });
@@ -208,15 +260,21 @@ export class BackgammonUI {
   startDragChecker(event, fromPoint) {
     if (!this.active || this.engine.winner || this.engine.doubleOfferedBy) return;
     if (this.engine.movesLeft.length === 0) return;
+    if (this._isExecuting) return;
     if (!this.hasSelectableChecker(fromPoint)) return;
     event.preventDefault();
-    const legal = this.engine.getLegalMoves().filter((m) => m.from === fromPoint);
+
+    // Drag exposes single-die destinations; combined moves require two clicks.
+    const legal = this.engine.getLegalMoves().filter(m => m.from === fromPoint);
     if (legal.length === 0) return;
-    this.selectedFrom = fromPoint;
-    this.dragState = {
+
+    // Clear any pending click-selection so drag takes over cleanly.
+    this._destinations  = null;
+    this.selectedFrom   = fromPoint;
+    this.dragState      = {
       from: fromPoint,
       pointerId: event.pointerId,
-      legalTargets: legal.map((m) => m.to)
+      legalTargets: legal.map(m => m.to)
     };
     this.hoverDropPoint = null;
     this.render();
@@ -271,14 +329,17 @@ export class BackgammonUI {
     if (event.pointerId !== this.dragState.pointerId) return;
     const from = this.dragState.from;
     const drop = this.hoverDropPoint;
-    this.dragState = null;
+    this.dragState      = null;
     this.hoverDropPoint = null;
+    this._destinations  = null;
     if (drop === null) {
+      this.selectedFrom = null;
       this.render();
       return;
     }
     const result = this.engine.move(from, drop);
     if (result.ok) {
+      this._pendingSnapTarget = typeof drop === "number" ? drop : null;
       this.selectedFrom = null;
       this.playCheckerSfx();
     }
@@ -316,42 +377,52 @@ export class BackgammonUI {
 
   buildPoint(index, isTop) {
     const point = document.createElement("button");
-    point.type = "button";
+    point.type  = "button";
     point.className = `bg-point ${isTop ? "top" : "bottom"} ${(index % 2 === 0) ? "light" : "dark"}`;
     point.dataset.point = String(index);
     this.pointElements.set(index, point);
     point.addEventListener("click", () => this.handlePointClick(index));
+
     const count = this.engine.points[index];
     const owner = count > 0 ? "white" : count < 0 ? "black" : "none";
-    const abs = Math.abs(count);
+    const abs   = Math.abs(count);
+
+    // Use the cached legal-move list (set once per renderBoard call)
+    const legal    = this._cachedLegalMoves;
+    const hasLegal = legal.some(m => m.from === index);
+
     if (this.selectedFrom === index) point.classList.add("selected");
-    const legal = this.engine.getLegalMoves();
-    if (legal.some((m) => m.from === index)) point.classList.add("has-legal");
-    if (this.selectedFrom !== null && legal.some((m) => m.from === this.selectedFrom && m.to === index)) {
-      point.classList.add("legal-dest");
-    }
-    if (this.hoverDropPoint === index) {
-      point.classList.add("drop-hover");
+    if (hasLegal)                     point.classList.add("has-legal");
+    if (this.hoverDropPoint === index) point.classList.add("drop-hover");
+
+    // Destination highlights come from the MoveManager's pre-computed map.
+    if (this._destinations) {
+      const pathInfo = this._destinations.get(index);
+      if (pathInfo) {
+        point.classList.add(pathInfo.isCombined ? "legal-dest-combined" : "legal-dest");
+      }
     }
 
     const label = document.createElement("span");
-    label.className = "bg-point-label";
+    label.className  = "bg-point-label";
     label.textContent = this.getPointLabel(index);
     point.appendChild(label);
-    const hasLegal = legal.some((m) => m.from === index);
-    const stack = document.createElement("div");
-    stack.className = "bg-stack";
+
+    const stack        = document.createElement("div");
+    stack.className    = "bg-stack";
     const visibleCount = Math.min(abs, 5);
-    for (let i = 0; i < visibleCount; i += 1) {
+
+    for (let i = 0; i < visibleCount; i++) {
       const checker = document.createElement("span");
       checker.className = `bg-checker ${owner}`;
       checker.style.transform = `translateY(${isTop ? -i * 6 : i * 6}px)`;
+
       if (this.selectedFrom === index) checker.classList.add("lifted");
-      const isLastMoveLanding = this.engine.lastMove && this.engine.lastMove.to === index && i === 0;
-      if (isLastMoveLanding) {
-        checker.classList.add("moved");
-      }
-      // One-click snap animation on the topmost checker of the landing point
+
+      const isLastMoveLanding = this.engine.lastMove?.to === index && i === 0;
+      if (isLastMoveLanding) checker.classList.add("moved");
+
+      // Snap/land animation on the topmost checker of the landing point
       if (this._pendingSnapTarget === index && i === 0) {
         checker.classList.add("one-click-moved");
         checker.addEventListener("animationend", () => {
@@ -359,20 +430,24 @@ export class BackgammonUI {
           this._pendingSnapTarget = null;
         }, { once: true });
       }
-      // Glow: checkers that belong to the current player and have legal moves
+
+      // Glow pulse: own checkers that have at least one legal move available
       if (hasLegal && owner === this.engine.turn && this.engine.dice.length > 0) {
         checker.classList.add("can-move");
       }
+
       checker.dataset.fromPoint = String(index);
-      checker.addEventListener("pointerdown", (event) => this.startDragChecker(event, index));
+      checker.addEventListener("pointerdown", e => this.startDragChecker(e, index));
       stack.appendChild(checker);
     }
+
     if (abs > 5) {
       const extra = document.createElement("span");
-      extra.className = "bg-extra";
+      extra.className  = "bg-extra";
       extra.textContent = `+${abs - 5}`;
       stack.appendChild(extra);
     }
+
     point.appendChild(stack);
     return point;
   }
@@ -451,10 +526,9 @@ export class BackgammonUI {
     this.offSlotWhite = whiteSlot;
     this.offSlotBlack = blackSlot;
 
-    const legal = this.engine.getLegalMoves();
-    const canOff = this.selectedFrom !== null && legal.some((m) => m.from === this.selectedFrom && m.to === "off");
-    const bearingState = this.engine.canBearOff(this.engine.turn);
-    if (canOff || bearingState) {
+    // Highlight bearing-off slots when "off" is a reachable destination.
+    const canOff = this._destinations?.has("off") || this.engine.canBearOff(this.engine.turn);
+    if (canOff) {
       whiteSlot.classList.add("legal-off");
       blackSlot.classList.add("legal-off");
     }
@@ -523,6 +597,10 @@ export class BackgammonUI {
   }
 
   renderBoard() {
+    // Cache legal moves once per render pass so each buildPoint doesn't
+    // re-run the expensive maxMovableCount recursion 24 separate times.
+    this._cachedLegalMoves = this.engine.getLegalMoves();
+
     const board = this.elements.backgammonBoard;
     board.innerHTML = "";
     this.pointElements.clear();
@@ -683,7 +761,8 @@ export class BackgammonUI {
   async rollDiceFromUI() {
     const roll = this.engine.rollDice();
     if (!roll) return;
-    this.selectedFrom = null;
+    this._destinations  = null;
+    this.selectedFrom   = null;
     this.playDiceSfx();
 
     const values = this.engine.dice;
@@ -848,7 +927,8 @@ export class BackgammonUI {
       ],
       onNextRound: () => {
         this.engine.startNextGame();
-        this.selectedFrom = null;
+        this._deselect();
+        this._isExecuting    = false;
         this.lastWinAnnounced = "";
         this.render();
       },
