@@ -1439,6 +1439,66 @@ label {
   100% { transform: translateY(-8px); opacity: 0; }
 }
 
+.kiraathane-ad {
+  margin-top: 8px;
+  border: 1px solid rgba(236, 195, 133, 0.55);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background:
+    linear-gradient(135deg, rgba(88, 52, 28, 0.92), rgba(52, 28, 15, 0.92)),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.03) 0 6px, rgba(0, 0, 0, 0.05) 6px 12px);
+  box-shadow: inset 0 0 0 1px rgba(236, 209, 175, 0.2);
+}
+
+.kiraathane-ad-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kiraathane-ad-badge {
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fde68a;
+  font-weight: 700;
+}
+
+.kiraathane-ad-close {
+  border-radius: 999px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 0.76rem;
+  line-height: 1;
+}
+
+.kiraathane-ad-copy {
+  margin: 8px 0 10px;
+  font-size: 0.84rem;
+  color: #f8e9d4;
+  line-height: 1.35;
+}
+
+.kiraathane-ad-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fde68a;
+  text-decoration: none;
+  border: 1px solid rgba(236, 195, 133, 0.45);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: rgba(20, 10, 4, 0.25);
+}
+
+.kiraathane-ad-link:hover {
+  filter: brightness(1.08);
+}
+
 body.layout-focus .meta-panel,
 body.layout-focus .training-panel,
 body.layout-focus .analysis-panel {

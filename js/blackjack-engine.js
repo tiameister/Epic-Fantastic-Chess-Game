@@ -2,9 +2,11 @@
 // Pure game logic — zero DOM dependencies.
 // Rules: 6-deck shoe, S17 (dealer stands on soft 17), Blackjack pays 3:2,
 //        Double Down on any first two cards, Split on same-value pairs (once).
+// Multi-player: 1–7 players, sequential betting + turn order, shared dealer.
 
 const SUITS = ["spades", "hearts", "diamonds", "clubs"];
 const RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+export const MAX_PLAYERS = 7;
 
 function rankValue(rank) {
   if (rank === "A") return 11;
@@ -32,167 +34,233 @@ function fisherYates(arr) {
 
 export class BlackjackEngine {
   /**
-   * @param {number} numDecks       Number of decks in the shoe (default 6)
-   * @param {number} cutPenetration Fraction of shoe dealt before reshuffling (default 0.75)
-   * @param {number} startingBalance Player starting balance
+   * @param {string[]} playerNames  Array of player names (1–7)
+   * @param {number}   numDecks       Number of decks in the shoe (default 6)
+   * @param {number}   cutPenetration Fraction of shoe dealt before reshuffling (default 0.75)
+   * @param {number}   startingBalance Each player's starting balance
    */
-  constructor(numDecks = 6, cutPenetration = 0.75, startingBalance = 1000) {
+  constructor(playerNames = ["Player 1"], numDecks = 6, cutPenetration = 0.75, startingBalance = 1000) {
     this.numDecks = numDecks;
     this.cutPenetration = cutPenetration;
-    this.balance = startingBalance;
+    this.startingBalance = startingBalance;
 
     // Shoe state
     this.shoe = [];
-    this.cutCardPos = 0;       // cards remaining in shoe at which reshuffle is flagged
+    this.cutCardPos = 0;
     this.reshuffleNeeded = false;
 
     // Round state
     this.phase = "idle";       // 'idle' | 'player' | 'dealer' | 'settled'
-    this.currentBet = 0;       // accumulated bet before dealing
-    this.dealerHand = [];      // [{suit, rank, faceDown}]
-    this.playerHands = [[]];   // array of hands (split creates extra hands)
-    this.handBets = [0];       // bet per hand
-    this.activeHandIndex = 0;
-    this.lastResults = [];     // [{ result, net, handIndex }]
+    this.dealerHand = [];
+    this.activePlayers = [];   // players with bets this round
+    this.activePlayerIndex = 0; // index into activePlayers
+    this.bettingPlayerIndex = 0; // index into this.players (during idle)
     this.roundCount = 0;
 
-    // ── Stats (used by challenge system) ──────────────────────────────────
-    this.stats = {
-      wins: 0,
-      losses: 0,
-      pushes: 0,
-      blackjacks: 0,
-      doubleWins: 0,
-      currentStreak: 0,
-      bestStreak: 0,
-      handsInCurrentShoe: 0,  // wins counted in current shoe before reshuffle
-      lastWasDouble: false,   // flag so UI can credit doubleWins
-    };
-
+    this.players = [];
+    this.setupPlayers(playerNames);
     this.buildShoe();
   }
+
+  // ─── Player Management ─────────────────────────────────────────────────────
+
+  setupPlayers(names) {
+    const safe = names.slice(0, MAX_PLAYERS);
+    this.players = safe.map((name, i) => this._createPlayer(name, i));
+    this.bettingPlayerIndex = 0;
+    this.activePlayerIndex = 0;
+    this.activePlayers = [];
+    this.dealerHand = [];
+    this.phase = "idle";
+  }
+
+  _createPlayer(name, id) {
+    return {
+      id,
+      name,
+      balance: this.startingBalance,
+      currentBet: 0,
+      playerHands: [[]],
+      handBets: [0],
+      activeHandIndex: 0,
+      lastResults: [],
+      stats: {
+        wins: 0,
+        losses: 0,
+        pushes: 0,
+        blackjacks: 0,
+        doubleWins: 0,
+        currentStreak: 0,
+        bestStreak: 0,
+        handsInCurrentShoe: 0,
+        lastWasDouble: false,
+      },
+    };
+  }
+
+  get activePlayer() { return this.activePlayers[this.activePlayerIndex] ?? null; }
+  get bettingPlayer() { return this.players[this.bettingPlayerIndex] ?? null; }
 
   // ─── Shoe ──────────────────────────────────────────────────────────────────
 
   buildShoe() {
     const cards = [];
-    for (let d = 0; d < this.numDecks; d++) {
-      cards.push(...buildDeck());
-    }
+    for (let d = 0; d < this.numDecks; d++) cards.push(...buildDeck());
     fisherYates(cards);
     this.shoe = cards;
-    // Cut card: when remaining cards drop below this threshold, flag reshuffle
     this.cutCardPos = Math.floor(this.shoe.length * (1 - this.cutPenetration));
     this.reshuffleNeeded = false;
-    this.stats.handsInCurrentShoe = 0;
+    for (const p of this.players) p.stats.handsInCurrentShoe = 0;
   }
 
   _dealCard(faceDown = false) {
-    if (this.shoe.length === 0) {
-      this.buildShoe();
-    }
+    if (this.shoe.length === 0) this.buildShoe();
     const card = this.shoe.pop();
     card.faceDown = faceDown;
-    // Flag reshuffle once cut card is passed (checked before next round starts)
-    if (this.shoe.length <= this.cutCardPos) {
-      this.reshuffleNeeded = true;
-    }
+    if (this.shoe.length <= this.cutCardPos) this.reshuffleNeeded = true;
     return card;
   }
 
   get shoePenetration() {
     const total = this.numDecks * 52;
-    const dealt = total - this.shoe.length;
-    return dealt / total;
+    return (total - this.shoe.length) / total;
   }
 
   // ─── Betting ───────────────────────────────────────────────────────────────
 
   addBet(amount) {
     if (this.phase !== "idle") return { ok: false, reason: "round_in_progress" };
+    const p = this.bettingPlayer;
+    if (!p) return { ok: false, reason: "no_player" };
     if (amount <= 0) return { ok: false, reason: "invalid_amount" };
-    if (this.currentBet + amount > this.balance) {
-      return { ok: false, reason: "insufficient_balance" };
-    }
-    this.currentBet += amount;
-    return { ok: true };
+    if (p.currentBet + amount > p.balance) return { ok: false, reason: "insufficient_balance" };
+    p.currentBet += amount;
+    return { ok: true, playerId: p.id };
   }
 
   clearBet() {
     if (this.phase !== "idle") return { ok: false, reason: "round_in_progress" };
-    this.currentBet = 0;
+    const p = this.bettingPlayer;
+    if (!p) return { ok: false, reason: "no_player" };
+    p.currentBet = 0;
     return { ok: true };
+  }
+
+  /** Advance the betting cursor to the next player. Returns true if all players have bet. */
+  advanceBettingPlayer() {
+    const next = this.bettingPlayerIndex + 1;
+    if (next < this.players.length) {
+      this.bettingPlayerIndex = next;
+      return { done: false, playerId: this.players[next].id };
+    }
+    return { done: true };
   }
 
   // ─── Round Lifecycle ───────────────────────────────────────────────────────
 
   startRound() {
     if (this.phase !== "idle") return { ok: false, reason: "round_in_progress" };
-    if (this.currentBet <= 0) return { ok: false, reason: "no_bet" };
-    if (this.currentBet > this.balance) return { ok: false, reason: "insufficient_balance" };
 
-    if (this.reshuffleNeeded) {
-      this.buildShoe();
+    const bettingPlayers = this.players.filter(p => p.currentBet > 0);
+    if (bettingPlayers.length === 0) return { ok: false, reason: "no_bets" };
+
+    if (this.reshuffleNeeded) this.buildShoe();
+
+    // Commit bets and initialise hands
+    this.activePlayers = bettingPlayers;
+    this.activePlayerIndex = 0;
+
+    // Standard casino deal order: card 1 to each player, then dealer, card 2 to each, then hole
+    for (const p of this.activePlayers) {
+      p.balance -= p.currentBet;
+      p.playerHands = [[this._dealCard()]];
+      p.handBets = [p.currentBet];
+      p.activeHandIndex = 0;
+      p.lastResults = [];
     }
+    const dealerCard1 = this._dealCard();
+    for (const p of this.activePlayers) {
+      p.playerHands[0].push(this._dealCard());
+    }
+    const dealerHole = this._dealCard(true);
+    this.dealerHand = [dealerCard1, dealerHole];
 
-    this.balance -= this.currentBet;
-    this.playerHands = [[this._dealCard(), this._dealCard()]];
-    this.dealerHand = [this._dealCard(), this._dealCard(true)]; // second card face-down
-    this.handBets = [this.currentBet];
-    this.activeHandIndex = 0;
-    this.lastResults = [];
     this.phase = "player";
     this.roundCount++;
 
-    // Check for natural blackjack immediately
-    const playerBJ = this.isNatural(this.playerHands[0]);
+    // Natural check
     const dealerBJ = this._dealerHasNatural();
+    const naturalPlayerIds = this.activePlayers
+      .filter(p => this.isNatural(p.playerHands[0]))
+      .map(p => p.id);
 
-    if (playerBJ || dealerBJ) {
-      return { ok: true, event: "natural_check", playerBlackjack: playerBJ, dealerBlackjack: dealerBJ };
+    if (dealerBJ || naturalPlayerIds.length > 0) {
+      return { ok: true, event: "natural_check", dealerBlackjack: dealerBJ, naturalPlayerIds };
     }
-
     return { ok: true, event: "round_started" };
   }
 
-  /** Settle immediately when naturals are involved (called by UI after animation). */
-  settleNaturals(playerBJ, dealerBJ) {
-    this.dealerHand[1].faceDown = false; // reveal hole card
-    this.phase = "settled";
+  /**
+   * Settle all players involved in naturals (player BJ or dealer BJ).
+   * Returns results and removes settled players from activePlayers.
+   */
+  settleNaturals(dealerBJ, naturalPlayerIds) {
+    this.dealerHand[1].faceDown = false;
+    const results = [];
 
-    let result, net;
-    if (playerBJ && dealerBJ) {
-      result = "push";
-      net = this.handBets[0]; // return bet
-    } else if (playerBJ) {
-      result = "blackjack";
-      net = this.handBets[0] + Math.floor(this.handBets[0] * 1.5); // 3:2 payout
-      this.stats.blackjacks++;
-    } else {
-      result = "dealer_blackjack";
-      net = 0;
+    for (const p of this.activePlayers) {
+      const playerBJ = naturalPlayerIds.includes(p.id);
+      if (!playerBJ && !dealerBJ) continue; // this player continues to play normally
+
+      let result, net;
+      if (playerBJ && dealerBJ) {
+        result = "push";
+        net = p.handBets[0];
+      } else if (playerBJ) {
+        result = "blackjack";
+        net = p.handBets[0] + Math.floor(p.handBets[0] * 1.5);
+        p.stats.blackjacks++;
+      } else {
+        result = "dealer_blackjack";
+        net = 0;
+      }
+
+      p.balance += net;
+      p.lastResults = [{ result, net, handIndex: 0, bet: p.handBets[0] }];
+      this._recordPlayerRoundStats(p, result === "blackjack", true);
+      results.push({ playerId: p.id, playerName: p.name, result, net });
     }
 
-    this.balance += net;
-    this.lastResults = [{ result, net, handIndex: 0 }];
-    this._recordRoundStats(result === "blackjack", result === "blackjack");
-    return { result, net };
+    if (dealerBJ) {
+      this.activePlayers = [];
+      this.phase = "settled";
+    } else {
+      this.activePlayers = this.activePlayers.filter(p => !naturalPlayerIds.includes(p.id));
+      if (this.activePlayers.length === 0) {
+        this.phase = "settled";
+      } else {
+        this.activePlayerIndex = 0;
+      }
+    }
+
+    return { results };
   }
 
   // ─── Player Actions ────────────────────────────────────────────────────────
 
   hit() {
     if (this.phase !== "player") return { ok: false, reason: "not_player_turn" };
-    const hand = this.playerHands[this.activeHandIndex];
+    const p = this.activePlayer;
+    const hand = p.playerHands[p.activeHandIndex];
     hand.push(this._dealCard());
 
     if (this.isBust(hand)) {
-      return { ok: true, event: "bust", handIndex: this.activeHandIndex };
+      return { ok: true, event: "bust", handIndex: p.activeHandIndex, playerId: p.id };
     }
     if (this.handValue(hand) === 21) {
-      return { ok: true, event: "twenty_one", handIndex: this.activeHandIndex };
+      return { ok: true, event: "twenty_one", handIndex: p.activeHandIndex, playerId: p.id };
     }
-    return { ok: true, event: "hit", handIndex: this.activeHandIndex };
+    return { ok: true, event: "hit", handIndex: p.activeHandIndex, playerId: p.id };
   }
 
   stand() {
@@ -204,43 +272,41 @@ export class BlackjackEngine {
     if (this.phase !== "player") return { ok: false, reason: "not_player_turn" };
     if (!this.canDouble()) return { ok: false, reason: "cannot_double" };
 
-    const hand = this.playerHands[this.activeHandIndex];
-    const extraBet = Math.min(this.handBets[this.activeHandIndex], this.balance);
-    this.balance -= extraBet;
-    this.handBets[this.activeHandIndex] += extraBet;
-    this.stats.lastWasDouble = true;
+    const p = this.activePlayer;
+    const hand = p.playerHands[p.activeHandIndex];
+    const extraBet = Math.min(p.handBets[p.activeHandIndex], p.balance);
+    p.balance -= extraBet;
+    p.handBets[p.activeHandIndex] += extraBet;
+    p.stats.lastWasDouble = true;
 
     hand.push(this._dealCard());
     const busted = this.isBust(hand);
     const res = this._advanceHand();
-    return { ok: true, event: busted ? "bust" : "double", handIndex: this.activeHandIndex, ...res };
+    return { ok: true, event: busted ? "bust" : "double", handIndex: p.activeHandIndex, playerId: p.id, ...res };
   }
 
   split() {
     if (this.phase !== "player") return { ok: false, reason: "not_player_turn" };
     if (!this.canSplit()) return { ok: false, reason: "cannot_split" };
 
-    const hand = this.playerHands[this.activeHandIndex];
-    const splitBet = this.handBets[this.activeHandIndex];
-    if (splitBet > this.balance) return { ok: false, reason: "insufficient_balance" };
+    const p = this.activePlayer;
+    const hand = p.playerHands[p.activeHandIndex];
+    const splitBet = p.handBets[p.activeHandIndex];
+    if (splitBet > p.balance) return { ok: false, reason: "insufficient_balance" };
 
-    this.balance -= splitBet;
-
-    // Create two new hands from the pair
+    p.balance -= splitBet;
     const card1 = hand[0];
     const card2 = hand[1];
     const newHand1 = [card1, this._dealCard()];
     const newHand2 = [card2, this._dealCard()];
+    p.playerHands.splice(p.activeHandIndex, 1, newHand1, newHand2);
+    p.handBets.splice(p.activeHandIndex, 1, splitBet, splitBet);
 
-    this.playerHands.splice(this.activeHandIndex, 1, newHand1, newHand2);
-    this.handBets.splice(this.activeHandIndex, 1, splitBet, splitBet);
-
-    return { ok: true, event: "split", handIndex: this.activeHandIndex };
+    return { ok: true, event: "split", handIndex: p.activeHandIndex, playerId: p.id };
   }
 
   // ─── Dealer Phase ──────────────────────────────────────────────────────────
 
-  /** Reveal hole card and run dealer draw sequence. Returns cards drawn. */
   dealerPlay() {
     if (this.phase !== "dealer") return { ok: false, reason: "not_dealer_phase" };
     this.dealerHand[1].faceDown = false;
@@ -254,9 +320,7 @@ export class BlackjackEngine {
   }
 
   _dealerShouldHit() {
-    const val = this.handValue(this.dealerHand);
-    // S17: stand on soft 17 (val < 17 only)
-    return val < 17;
+    return this.handValue(this.dealerHand) < 17;
   }
 
   // ─── Settlement ────────────────────────────────────────────────────────────
@@ -266,110 +330,107 @@ export class BlackjackEngine {
     this.phase = "settled";
     const dealerVal = this.handValue(this.dealerHand);
     const dealerBust = this.isBust(this.dealerHand);
-    this.lastResults = [];
+    const allPlayerResults = [];
 
-    let roundWon = false;
+    for (const p of this.activePlayers) {
+      p.lastResults = [];
+      let roundWon = false;
 
-    for (let i = 0; i < this.playerHands.length; i++) {
-      const hand = this.playerHands[i];
-      const bet = this.handBets[i];
-      const playerVal = this.handValue(hand);
-      const playerBust = this.isBust(hand);
+      for (let i = 0; i < p.playerHands.length; i++) {
+        const hand = p.playerHands[i];
+        const bet = p.handBets[i];
+        const playerVal = this.handValue(hand);
+        const playerBust = this.isBust(hand);
 
-      let result, net;
-      if (playerBust) {
-        result = "lose";
-        net = 0;
-      } else if (dealerBust) {
-        result = "win";
-        net = bet * 2;
-      } else if (playerVal > dealerVal) {
-        result = "win";
-        net = bet * 2;
-      } else if (playerVal === dealerVal) {
-        result = "push";
-        net = bet;
-      } else {
-        result = "lose";
-        net = 0;
+        let result, net;
+        if (playerBust)              { result = "lose"; net = 0; }
+        else if (dealerBust)         { result = "win";  net = bet * 2; }
+        else if (playerVal > dealerVal) { result = "win";  net = bet * 2; }
+        else if (playerVal === dealerVal) { result = "push"; net = bet; }
+        else                         { result = "lose"; net = 0; }
+
+        p.balance += net;
+        p.lastResults.push({ result, net, bet, handIndex: i, playerVal, dealerVal });
+        if (result === "win") roundWon = true;
       }
 
-      this.balance += net;
-      this.lastResults.push({ result, net, bet, handIndex: i, playerVal, dealerVal });
-      if (result === "win") roundWon = true;
+      this._recordPlayerRoundStats(p, roundWon, false);
+      allPlayerResults.push({ playerId: p.id, playerName: p.name, results: p.lastResults });
     }
 
-    this._recordRoundStats(roundWon, false);
-    return { ok: true, results: this.lastResults };
+    return { ok: true, allPlayerResults };
   }
 
   resetForNextRound() {
     this.phase = "idle";
-    this.currentBet = 0;
     this.dealerHand = [];
-    this.playerHands = [[]];
-    this.handBets = [0];
-    this.activeHandIndex = 0;
-    this.stats.lastWasDouble = false;
-  }
-
-  _recordRoundStats(won, isBlackjack) {
-    this.stats.handsInCurrentShoe++;
-    if (won) {
-      this.stats.wins++;
-      this.stats.currentStreak++;
-      if (this.stats.currentStreak > this.stats.bestStreak) {
-        this.stats.bestStreak = this.stats.currentStreak;
-      }
-      if (this.stats.lastWasDouble) {
-        this.stats.doubleWins++;
-      }
-    } else if (this.lastResults.every(r => r.result === "push")) {
-      this.stats.pushes++;
-      // Push doesn't break streak
-    } else {
-      this.stats.losses++;
-      this.stats.currentStreak = 0;
+    this.activePlayers = [];
+    this.activePlayerIndex = 0;
+    this.bettingPlayerIndex = 0;
+    for (const p of this.players) {
+      p.currentBet = 0;
+      p.playerHands = [[]];
+      p.handBets = [0];
+      p.activeHandIndex = 0;
+      p.lastResults = [];
+      p.stats.lastWasDouble = false;
     }
   }
 
   // ─── Private Helpers ───────────────────────────────────────────────────────
 
   _advanceHand() {
-    const nextIndex = this.activeHandIndex + 1;
-    if (nextIndex < this.playerHands.length) {
-      this.activeHandIndex = nextIndex;
-      return { ok: true, event: "next_hand", handIndex: nextIndex };
+    const p = this.activePlayer;
+    const nextIdx = p.activeHandIndex + 1;
+    if (nextIdx < p.playerHands.length) {
+      p.activeHandIndex = nextIdx;
+      return { ok: true, event: "next_hand", handIndex: nextIdx, playerId: p.id };
     }
-    // All hands done — move to dealer phase
-    this.activeHandIndex = 0;
+    return this._advancePlayer();
+  }
+
+  _advancePlayer() {
+    const nextIdx = this.activePlayerIndex + 1;
+    if (nextIdx < this.activePlayers.length) {
+      this.activePlayerIndex = nextIdx;
+      this.activePlayers[nextIdx].activeHandIndex = 0;
+      return { ok: true, event: "next_player", playerId: this.activePlayers[nextIdx].id };
+    }
     this.phase = "dealer";
     return { ok: true, event: "dealer_phase" };
   }
 
+  _recordPlayerRoundStats(p, won, isBlackjack) {
+    p.stats.handsInCurrentShoe++;
+    if (won) {
+      p.stats.wins++;
+      p.stats.currentStreak++;
+      if (p.stats.currentStreak > p.stats.bestStreak) p.stats.bestStreak = p.stats.currentStreak;
+      if (p.stats.lastWasDouble) p.stats.doubleWins++;
+    } else if (p.lastResults.every(r => r.result === "push")) {
+      p.stats.pushes++;
+    } else {
+      p.stats.losses++;
+      p.stats.currentStreak = 0;
+    }
+  }
+
   _dealerHasNatural() {
-    // We can peek at the hole card only for natural detection
     const visible = this.dealerHand[0];
     const hole = this.dealerHand[1];
-    const twoCardHand = [visible, { ...hole, faceDown: false }];
-    return this.isNatural(twoCardHand);
+    return this.isNatural([visible, { ...hole, faceDown: false }]);
   }
 
   // ─── Hand Evaluation ───────────────────────────────────────────────────────
 
   handValue(cards) {
-    let total = 0;
-    let aces = 0;
+    let total = 0, aces = 0;
     for (const card of cards) {
       if (card.faceDown) continue;
-      const v = rankValue(card.rank);
       if (card.rank === "A") aces++;
-      total += v;
+      total += rankValue(card.rank);
     }
-    while (total > 21 && aces > 0) {
-      total -= 10;
-      aces--;
-    }
+    while (total > 21 && aces > 0) { total -= 10; aces--; }
     return total;
   }
 
@@ -377,15 +438,11 @@ export class BlackjackEngine {
     const visible = cards.filter(c => !c.faceDown);
     if (!visible.some(c => c.rank === "A")) return false;
     let hard = 0;
-    for (const c of visible) {
-      hard += c.rank === "A" ? 1 : rankValue(c.rank);
-    }
+    for (const c of visible) hard += c.rank === "A" ? 1 : rankValue(c.rank);
     return hard + 10 <= 21;
   }
 
-  isBust(cards) {
-    return this.handValue(cards) > 21;
-  }
+  isBust(cards) { return this.handValue(cards) > 21; }
 
   isNatural(cards) {
     const visible = cards.filter(c => !c.faceDown);
@@ -395,38 +452,57 @@ export class BlackjackEngine {
   }
 
   canSplit() {
-    if (this.playerHands.length >= 4) return false; // max 4 hands
-    const hand = this.playerHands[this.activeHandIndex];
+    const p = this.activePlayer;
+    if (!p) return false;
+    if (p.playerHands.length >= 4) return false;
+    const hand = p.playerHands[p.activeHandIndex];
     if (hand.length !== 2) return false;
-    if (this.handBets[this.activeHandIndex] > this.balance) return false;
+    if (p.handBets[p.activeHandIndex] > p.balance) return false;
     return rankValue(hand[0].rank) === rankValue(hand[1].rank);
   }
 
   canDouble() {
-    const hand = this.playerHands[this.activeHandIndex];
+    const p = this.activePlayer;
+    if (!p) return false;
+    const hand = p.playerHands[p.activeHandIndex];
     if (hand.length !== 2) return false;
-    const extra = Math.min(this.handBets[this.activeHandIndex], this.balance);
-    return extra > 0;
+    return Math.min(p.handBets[p.activeHandIndex], p.balance) > 0;
   }
 
+  // ─── State Snapshot ────────────────────────────────────────────────────────
+
   getState() {
+    const ap = this.activePlayer;
     return {
       phase: this.phase,
-      balance: this.balance,
-      currentBet: this.currentBet,
       dealerHand: this.dealerHand,
-      playerHands: this.playerHands,
-      handBets: this.handBets,
-      activeHandIndex: this.activeHandIndex,
       dealerValue: this.handValue(this.dealerHand),
-      playerValues: this.playerHands.map(h => this.handValue(h)),
+      players: this.players.map(p => this._playerSnapshot(p)),
+      activePlayers: this.activePlayers.map(p => this._playerSnapshot(p)),
+      activePlayerIndex: this.activePlayerIndex,
+      bettingPlayerIndex: this.bettingPlayerIndex,
+      activePlayer: ap ? this._playerSnapshot(ap) : null,
+      bettingPlayer: this.bettingPlayer ? this._playerSnapshot(this.bettingPlayer) : null,
       canSplit: this.canSplit(),
       canDouble: this.canDouble(),
       reshuffleNeeded: this.reshuffleNeeded,
       shoePenetration: this.shoePenetration,
       roundCount: this.roundCount,
-      lastResults: this.lastResults,
-      stats: { ...this.stats },
+    };
+  }
+
+  _playerSnapshot(p) {
+    return {
+      id: p.id,
+      name: p.name,
+      balance: p.balance,
+      currentBet: p.currentBet,
+      playerHands: p.playerHands,
+      handBets: p.handBets,
+      activeHandIndex: p.activeHandIndex,
+      lastResults: p.lastResults,
+      stats: { ...p.stats },
+      playerValues: p.playerHands.map(h => this.handValue(h)),
     };
   }
 }

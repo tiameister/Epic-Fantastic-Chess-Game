@@ -62,6 +62,8 @@ const elements = {
   backgammonStatus: document.getElementById("backgammonStatus"),
   backgammonCallout: document.getElementById("backgammonCallout"),
   backgammonToast: document.getElementById("backgammonToast"),
+  backgammonAdCard: document.getElementById("backgammonAdCard"),
+  backgammonAdCloseBtn: document.getElementById("backgammonAdCloseBtn"),
   backgammonScore: document.getElementById("backgammonScore"),
   backgammonCube: document.getElementById("backgammonCube"),
   backgammonDice: document.getElementById("backgammonDice"),
@@ -200,7 +202,7 @@ function showBackgammon() {
   backgammonUI.setActive(true);
   if (blackjackUI) blackjackUI.setActive(false);
   backgammonUI.render();
-  showMatchSplash("Royal Backgammon", "Turkish Tavla");
+  showMatchSplash("KOF KIRAATHANE", "Mahalle Tavla Masasi");
 }
 
 function showBlackjack() {

@@ -26,7 +26,7 @@
       <p>Choose a mode and play locally on one screen.</p>
       <div class="chooser-actions">
         <button id="chooseChessBtn" type="button">Play Chess</button>
-        <button id="chooseBackgammonBtn" type="button">Play Backgammon</button>
+        <button id="chooseBackgammonBtn" type="button">Play KOF KIRAATHANE</button>
         <button id="chooseBlackjackBtn" type="button">Play Blackjack</button>
       </div>
       <p class="chooser-note">Designed and maintained by Taha Ilter Akar · Student project with professional UX goals.</p>
@@ -304,8 +304,8 @@
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <section id="backgammonCard" class="game-card hidden">
       <header class="topbar">
-        <h1>Royal Backgammon</h1>
-        <p>Traditional Turkish Tavla mode - by Taha Ilter Akar</p>
+        <h1>KOF KIRAATHANE</h1>
+        <p>Mahalle usulu Tavla keyfi - cay, muhabbet ve zar sesi</p>
       </header>
       <details class="advanced-controls backgammon-settings">
         <summary>Tavla Settings</summary>
@@ -343,6 +343,21 @@
       </section>
       <section id="backgammonDice" class="backgammon-dice" title="Click dice area to roll"></section>
       <div id="backgammonToast" class="backgammon-toast" aria-live="polite"></div>
+      <aside id="backgammonAdCard" class="kiraathane-ad hidden" aria-live="polite">
+        <div class="kiraathane-ad-head">
+          <span class="kiraathane-ad-badge">KIRAATHANE ILANI</span>
+          <button id="backgammonAdCloseBtn" type="button" class="kiraathane-ad-close" aria-label="Close advertisement">✕</button>
+        </div>
+        <p class="kiraathane-ad-copy">
+          2. elde guvenilir arac arayanlara komsudan tavsiye: Beray Motorlu Araclar.
+        </p>
+        <a
+          class="kiraathane-ad-link"
+          href="https://www.beray.com.tr"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Beray Motorlu Araclar'a git</a>
+      </aside>
       <section id="backgammonBoard" class="backgammon-board"></section>
       <ul id="backgammonHints" class="meta-list hidden"></ul>
       <!-- Backgammon victory — rich overlay from GameFeel; legacy IDs kept for fallback -->

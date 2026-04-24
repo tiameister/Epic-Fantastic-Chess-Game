@@ -27,6 +27,9 @@ export class BackgammonUI {
     this._diceCount         = 0;
     this._barDiceEl         = null;  // div inside the bar that holds the 3D dice
     this._pendingSnapTarget = null;  // point index where the last move landed
+    this.completedMoveCount = 0;
+    this.adShownThisRound = false;
+    this.adTriggerMoves = 4;
   }
 
   init() {
@@ -35,6 +38,12 @@ export class BackgammonUI {
       const ok = this.engine.undo();
       if (!ok) {
         this.showToast(this.language === "tr" ? "Geri alınacak hamle yok" : "No move to undo");
+      } else {
+        this.completedMoveCount = Math.max(0, this.completedMoveCount - 1);
+        if (this.completedMoveCount < this.adTriggerMoves) {
+          this.hideAdCard();
+          this.adShownThisRound = false;
+        }
       }
       this._deselect();
       this._isExecuting = false;
@@ -72,6 +81,7 @@ export class BackgammonUI {
       this.engine.setDoublingEnabled(this.elements.backgammonDoublingToggle.checked);
       this._deselect();
       this._isExecuting = false;
+      this.resetRoundAdProgress();
       this.hideGameOverModal();
       this.render();
     });
@@ -79,9 +89,13 @@ export class BackgammonUI {
       this.engine.startNextGame();
       this._deselect();
       this._isExecuting = false;
+      this.resetRoundAdProgress();
       this.hideGameOverModal();
       this.render();
     });
+    if (this.elements.backgammonAdCloseBtn) {
+      this.elements.backgammonAdCloseBtn.addEventListener("click", () => this.hideAdCard());
+    }
     this.elements.backgammonDoublingToggle.addEventListener("change", () => {
       this.engine.setDoublingEnabled(this.elements.backgammonDoublingToggle.checked);
       this.render();
@@ -108,6 +122,7 @@ export class BackgammonUI {
     if (active) {
       this.render();
     } else {
+      this.hideAdCard();
       this.hideGameOverModal();
     }
   }
@@ -214,6 +229,7 @@ export class BackgammonUI {
         }
 
         this._pendingSnapTarget = typeof step.to === "number" ? step.to : null;
+        this.onSuccessfulMove();
         this.render();
         this.playCheckerSfx();
 
@@ -696,6 +712,35 @@ export class BackgammonUI {
     this.showToast(text);
   }
 
+  onSuccessfulMove() {
+    this.completedMoveCount += 1;
+    if (this.adShownThisRound || this.completedMoveCount < this.adTriggerMoves) {
+      return;
+    }
+    this.adShownThisRound = true;
+    this.showAdCard();
+  }
+
+  resetRoundAdProgress() {
+    this.completedMoveCount = 0;
+    this.adShownThisRound = false;
+    this.hideAdCard();
+  }
+
+  showAdCard() {
+    if (!this.elements.backgammonAdCard) return;
+    this.elements.backgammonAdCard.classList.remove("hidden");
+    const adToast = this.language === "tr"
+      ? "Kiraathane ilani: Beray Motorlu Araclar"
+      : "Kiraathane ad: Beray Motorlu Araclar";
+    this.showToast(adToast);
+  }
+
+  hideAdCard() {
+    if (!this.elements.backgammonAdCard) return;
+    this.elements.backgammonAdCard.classList.add("hidden");
+  }
+
   turkishDoubleName(v) {
     const map = {
       1: "Hep Yek",
@@ -802,6 +847,7 @@ export class BackgammonUI {
         this.engine.startNextGame();
         this._deselect();
         this._isExecuting    = false;
+        this.resetRoundAdProgress();
         this.lastWinAnnounced = "";
         this.render();
       },
