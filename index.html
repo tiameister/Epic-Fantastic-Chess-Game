@@ -19,6 +19,24 @@
       <p class="ss-hint">Click anywhere to enter</p>
     </div>
   </div>
+  <script>
+    (function startupSplashFallback() {
+      const splash = document.getElementById("startupSplash");
+      const chooser = document.getElementById("gameChooser");
+      if (!splash) return;
+
+      const dismiss = () => {
+        if (splash.classList.contains("leaving")) return;
+        splash.classList.add("leaving");
+        if (chooser) chooser.classList.remove("hidden");
+        splash.addEventListener("animationend", () => splash.remove(), { once: true });
+        window.setTimeout(() => splash.remove(), 1000);
+      };
+
+      splash.addEventListener("click", dismiss, { once: true });
+      window.setTimeout(dismiss, 2800);
+    }());
+  </script>
 
   <section id="gameChooser" class="game-chooser hidden">
     <div class="chooser-card">
@@ -375,93 +393,131 @@
     <!--  BLACKJACK / ROYAL 21                                              -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <section id="blackjackCard" class="game-card hidden">
-      <header class="topbar">
-        <h1>Royal 21</h1>
-        <p>Six-Deck Blackjack · S17 · 3:2 Naturals — by Taha Ilter Akar</p>
-      </header>
 
-      <!-- ── Felt Table ───────────────────────────────────────────────── -->
-      <section class="bj-table" aria-label="Blackjack table">
-        <!-- Shoe visual (top-right anchor for deal animations) -->
-        <div id="bjShoe" class="bj-shoe" aria-label="Card shoe">
-          <div class="bj-shoe-deck-stack"></div>
-          <div class="bj-shoe-body">
-            <span class="bj-shoe-label">SHOE</span>
-            <span id="bjShoeIndicator" class="bj-shoe-indicator">6 Decks</span>
+      <!-- ── Lobby — shown when entering the game ──────────────────────── -->
+      <div id="bjLobby" class="bj-lobby">
+        <div class="bj-lobby-inner">
+          <div class="bj-lobby-header">
+            <div class="bj-lobby-logo" aria-hidden="true">🃏</div>
+            <h2 class="bj-lobby-title">Royal 21</h2>
+            <p class="bj-lobby-subtitle">Six-Deck Blackjack · S17 · 3:2 Naturals</p>
+          </div>
+
+          <div class="bj-lobby-form">
+            <h3 class="bj-lobby-section-title">
+              Who's Playing?
+              <span class="bj-lobby-limit">1–7 players</span>
+            </h3>
+            <div id="bjLobbyPlayers" class="bj-lobby-players">
+              <!-- Player rows rendered dynamically by JS -->
+            </div>
+            <button id="bjAddPlayerBtn" type="button" class="bj-lobby-add-btn">
+              + Add Player
+            </button>
+          </div>
+
+          <div class="bj-lobby-actions">
+            <button id="bjStartGameBtn" type="button" class="bj-btn-primary bj-lobby-start-btn">
+              Deal Me In ›
+            </button>
+            <button id="bjLobbyBackBtn" type="button" class="bj-lobby-back-btn">
+              ⟵ Menu
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Game area — shown after lobby ─────────────────────────────── -->
+      <div id="bjGameArea" class="bj-game-area bj-hidden">
+
+        <header class="topbar">
+          <h1>Royal 21</h1>
+          <p>Six-Deck Blackjack · S17 · 3:2 Naturals — by Taha Ilter Akar</p>
+        </header>
+
+        <!-- ── Felt Table ─────────────────────────────────────────────── -->
+        <section class="bj-table" aria-label="Blackjack table">
+          <!-- Shoe visual (top-right anchor for deal animations) -->
+          <div id="bjShoe" class="bj-shoe" aria-label="Card shoe">
+            <div class="bj-shoe-deck-stack"></div>
+            <div class="bj-shoe-body">
+              <span class="bj-shoe-label">SHOE</span>
+              <span id="bjShoeIndicator" class="bj-shoe-indicator">6 Decks</span>
+            </div>
+          </div>
+
+          <!-- Dealer zone -->
+          <div class="bj-dealer-zone">
+            <div class="bj-zone-label">DEALER</div>
+            <div id="bjDealerHand" class="bj-hand" aria-live="polite"></div>
+            <div id="bjDealerValue" class="bj-hand-value-dealer"></div>
+          </div>
+
+          <!-- Felt inscription arc -->
+          <div class="bj-felt-arc" aria-hidden="true">
+            <span>BLACKJACK PAYS 3 TO 2 &nbsp;·&nbsp; DEALER STANDS ON ALL 17s</span>
+          </div>
+
+          <!-- Player seats (multi-player: one seat per player) -->
+          <div class="bj-player-zone">
+            <div id="bjPlayerSeats" class="bj-player-seats" aria-live="polite"></div>
+          </div>
+
+          <!-- Bet + current player info (right side) -->
+          <div class="bj-bet-zone">
+            <div id="bjBetPlayerLabel" class="bj-bet-label">BET</div>
+            <div id="bjChipsDisplay" class="bj-chips-display" aria-label="Stacked bet chips"></div>
+            <div class="bj-bet-amount-display"><span id="bjBetAmount">$0</span></div>
+            <div id="bjBalance" class="bj-balance">$1,000</div>
+            <div class="bj-balance-label">BALANCE</div>
+          </div>
+        </section>
+
+        <!-- ── Status bar ──────────────────────────────────────────────── -->
+        <div id="bjStatus" class="bj-status" aria-live="polite">Place your bets!</div>
+
+        <!-- ── Betting controls ───────────────────────────────────────── -->
+        <div id="bjBettingControls" class="bj-betting-controls">
+          <div id="bjChipSelector" class="bj-chip-selector" aria-label="Choose chip denomination"></div>
+          <div class="bj-bet-actions">
+            <button id="bjClearBetBtn" type="button">Clear</button>
+            <button id="bjNextPlayerBtn" type="button" class="bj-btn-primary">Next Player →</button>
           </div>
         </div>
 
-        <!-- Dealer zone -->
-        <div class="bj-dealer-zone">
-          <div class="bj-zone-label">DEALER</div>
-          <div id="bjDealerHand" class="bj-hand" aria-live="polite"></div>
-          <div id="bjDealerValue" class="bj-hand-value-dealer"></div>
+        <!-- ── Player action controls (shown only on player turn) ────── -->
+        <div id="bjActionControls" class="bj-action-controls bj-hidden">
+          <button id="bjHitBtn"    type="button" class="bj-btn-action">Hit</button>
+          <button id="bjStandBtn"  type="button" class="bj-btn-action">Stand</button>
+          <button id="bjDoubleBtn" type="button" class="bj-btn-action">Double</button>
+          <button id="bjSplitBtn"  type="button" class="bj-btn-action" disabled>Split</button>
         </div>
 
-        <!-- Felt inscription arc -->
-        <div class="bj-felt-arc" aria-hidden="true">
-          <span>BLACKJACK PAYS 3 TO 2 &nbsp;·&nbsp; DEALER STANDS ON ALL 17s</span>
+        <!-- ── Nav row ────────────────────────────────────────────────── -->
+        <div class="bj-nav-row">
+          <button id="bjNewShoeBtn" type="button">New Shoe</button>
+          <button id="bjBackToChooserBtn" type="button">⟵ Menu</button>
         </div>
 
-        <!-- Player zone -->
-        <div class="bj-player-zone">
-          <div class="bj-zone-label">PLAYER</div>
-          <div id="bjPlayerHandWrapper" class="bj-player-hand-wrapper" aria-live="polite"></div>
+        <!-- ── Challenges panel ───────────────────────────────────────── -->
+        <div id="bjChallengesPanel" class="bj-challenges-panel" aria-label="Daily challenges"></div>
+
+        <!-- ── Outcome overlay — OUTSIDE the table so it isn't clipped ── -->
+        <div id="bjOutcomeOverlay" class="bj-outcome-overlay bj-hidden" role="dialog" aria-live="assertive">
+          <canvas id="bjConfettiCanvas" class="bj-confetti-canvas" aria-hidden="true"></canvas>
+          <div class="bj-outcome-card">
+            <div class="bj-outcome-streak" id="bjOutcomeStreak"></div>
+            <h2 id="bjOutcomeTitle" class="bj-outcome-title">Round Result</h2>
+            <p id="bjOutcomeDetail" class="bj-outcome-detail"></p>
+            <div id="bjOutcomePlayerResults" class="bj-outcome-player-results bj-hidden"></div>
+            <p id="bjOutcomeBonus" class="bj-outcome-bonus bj-hidden"></p>
+            <button id="bjNextRoundBtn" type="button" class="bj-btn-primary bj-btn-next-round">
+              Next Round ›
+            </button>
+          </div>
         </div>
 
-        <!-- Bet + balance (right side) -->
-        <div class="bj-bet-zone">
-          <div class="bj-bet-label">BET</div>
-          <div id="bjChipsDisplay" class="bj-chips-display" aria-label="Stacked bet chips"></div>
-          <div class="bj-bet-amount-display"><span id="bjBetAmount">$0</span></div>
-          <div id="bjBalance" class="bj-balance">$1,000</div>
-          <div class="bj-balance-label">BALANCE</div>
-        </div>
-      </section>
-
-      <!-- ── Status bar (below table, above controls) ─────────────────── -->
-      <div id="bjStatus" class="bj-status" aria-live="polite">Place your bet to begin.</div>
-
-      <!-- ── Betting controls ─────────────────────────────────────────── -->
-      <div id="bjBettingControls" class="bj-betting-controls">
-        <div id="bjChipSelector" class="bj-chip-selector" aria-label="Choose chip denomination"></div>
-        <div class="bj-bet-actions">
-          <button id="bjClearBetBtn" type="button">Clear</button>
-          <button id="bjDealBtn" type="button" class="bj-btn-primary" disabled>Deal</button>
-        </div>
-      </div>
-
-      <!-- ── Player action controls (shown only on player turn) ───────── -->
-      <div id="bjActionControls" class="bj-action-controls bj-hidden">
-        <button id="bjHitBtn"   type="button" class="bj-btn-action">Hit</button>
-        <button id="bjStandBtn" type="button" class="bj-btn-action">Stand</button>
-        <button id="bjDoubleBtn" type="button" class="bj-btn-action">Double</button>
-        <button id="bjSplitBtn"  type="button" class="bj-btn-action" disabled>Split</button>
-      </div>
-
-      <!-- ── Nav row ──────────────────────────────────────────────────── -->
-      <div class="bj-nav-row">
-        <button id="bjNewShoeBtn" type="button">New Shoe</button>
-        <button id="bjBackToChooserBtn" type="button">⟵ Menu</button>
-      </div>
-
-      <!-- ── Challenges panel ─────────────────────────────────────────── -->
-      <div id="bjChallengesPanel" class="bj-challenges-panel" aria-label="Daily challenges"></div>
-
-      <!-- ── Outcome overlay — OUTSIDE the table so it isn't clipped ─── -->
-      <div id="bjOutcomeOverlay" class="bj-outcome-overlay bj-hidden" role="dialog" aria-live="assertive">
-        <!-- Confetti lives inside the overlay so it renders above the backdrop -->
-        <canvas id="bjConfettiCanvas" class="bj-confetti-canvas" aria-hidden="true"></canvas>
-        <div class="bj-outcome-card">
-          <div class="bj-outcome-streak" id="bjOutcomeStreak"></div>
-          <h2 id="bjOutcomeTitle" class="bj-outcome-title">Round Result</h2>
-          <p id="bjOutcomeDetail" class="bj-outcome-detail"></p>
-          <p id="bjOutcomeBonus" class="bj-outcome-bonus"></p>
-          <button id="bjNextRoundBtn" type="button" class="bj-btn-primary bj-btn-next-round">
-            Next Round ›
-          </button>
-        </div>
-      </div>
+      </div><!-- /bjGameArea -->
     </section>
 
   </main>

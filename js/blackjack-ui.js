@@ -1,5 +1,8 @@
 // ─── Blackjack UI ─────────────────────────────────────────────────────────────
 // All DOM, animation and challenge logic. Zero engine coupling beyond API calls.
+// Multi-player: sequential betting + turn-based play at a shared table.
+
+import { MAX_PLAYERS } from "./blackjack-engine.js";
 
 const SUIT_SYMBOL = { spades: "♠", hearts: "♥", diamonds: "♦", clubs: "♣" };
 const SUIT_COLOR  = { spades: "black", hearts: "red", diamonds: "red", clubs: "black" };
@@ -13,7 +16,6 @@ const CHIP_DENOMINATIONS = [
 ];
 
 // ── Challenge definitions ──────────────────────────────────────────────────
-// Each has: id, label, desc, goal (number), type (streak|double|shoe|blackjack)
 const CHALLENGE_POOL = [
   { id: "streak3",    label: "Hot Hand",       desc: "Win 3 hands in a row",            goal: 3,  type: "streak"    },
   { id: "streak5",    label: "On Fire",        desc: "Win 5 hands in a row",            goal: 5,  type: "streak"    },
@@ -22,11 +24,10 @@ const CHALLENGE_POOL = [
   { id: "blackjack",  label: "Natural!",       desc: "Hit a natural Blackjack",         goal: 1,  type: "blackjack" },
   { id: "comeback",   label: "Comeback Kid",   desc: "Win after going below $500",      goal: 1,  type: "comeback"  },
 ];
-// Pick 3 challenges seeded by the current calendar day
+
 function getDailyChallenges() {
-  const seed = Math.floor(Date.now() / 86_400_000); // day number
+  const seed = Math.floor(Date.now() / 86_400_000);
   const pool = [...CHALLENGE_POOL];
-  // deterministic shuffle with the day seed
   for (let i = pool.length - 1; i > 0; i--) {
     const j = (seed * 31 + i * 7) % (i + 1);
     [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -35,6 +36,7 @@ function getDailyChallenges() {
 }
 
 const CONFETTI_COUNT = 130;
+const SEAT_COLORS = ["#d4af37", "#e07b54", "#5bb8d4", "#8ad45b", "#b87dd4", "#d45b8a", "#5bd4b0"];
 
 export class BlackjackUI {
   constructor(engine, elements, sound) {
@@ -45,73 +47,263 @@ export class BlackjackUI {
 
     this._confettiAnim  = null;
     this._challenges    = getDailyChallenges();
-    this._wentBelowHalf = false; // tracks "comeback" challenge condition
+    this._wentBelowHalf = {}; // { [playerId]: bool }
   }
 
   // ─── Init ──────────────────────────────────────────────────────────────────
 
   init() {
-    this._bindButtons();
-    this._renderChipSelector();
-    this._renderChallenges();
-    this._syncView();
+    this._bindLobbyButtons();
+    this._renderLobby();
   }
 
   setActive(active) {
     this.active = active;
+    if (active) {
+      this._showLobby();
+    }
   }
 
-  // ─── Button Wiring ─────────────────────────────────────────────────────────
+  // ─── Lobby ─────────────────────────────────────────────────────────────────
 
-  _bindButtons() {
+  _showLobby() {
+    const lobby = document.getElementById("bjLobby");
+    const game  = document.getElementById("bjGameArea");
+    if (lobby) lobby.classList.remove("bj-hidden");
+    if (game)  game.classList.add("bj-hidden");
+    this._renderLobby();
+  }
+
+  _hideLobby() {
+    const lobby = document.getElementById("bjLobby");
+    const game  = document.getElementById("bjGameArea");
+    if (lobby) lobby.classList.add("bj-hidden");
+    if (game)  game.classList.remove("bj-hidden");
+  }
+
+  _renderLobby() {
+    const container = document.getElementById("bjLobbyPlayers");
+    if (!container) return;
+
+    // Seed lobby with existing engine players or default
+    const names = this.engine.players.length > 0
+      ? this.engine.players.map(p => p.name)
+      : ["Player 1"];
+
+    container.innerHTML = "";
+    names.forEach((name, i) => this._appendLobbyRow(container, name, i));
+    this._refreshLobbyButtons();
+  }
+
+  _appendLobbyRow(container, name, idx) {
+    const row = document.createElement("div");
+    row.className = "bj-lobby-player-row";
+    row.dataset.row = idx;
+
+    const dot = document.createElement("div");
+    dot.className = "bj-lobby-seat-dot";
+    dot.style.background = SEAT_COLORS[idx % SEAT_COLORS.length];
+    dot.textContent = idx + 1;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "bj-lobby-name-input";
+    input.placeholder = `Player ${idx + 1}`;
+    input.value = name;
+    input.maxLength = 20;
+    input.setAttribute("aria-label", `Player ${idx + 1} name`);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "bj-lobby-remove-btn";
+    removeBtn.setAttribute("aria-label", "Remove player");
+    removeBtn.innerHTML = "✕";
+    removeBtn.addEventListener("click", () => this._removeLobbyRow(row));
+
+    row.appendChild(dot);
+    row.appendChild(input);
+    row.appendChild(removeBtn);
+    container.appendChild(row);
+  }
+
+  _removeLobbyRow(row) {
+    const container = document.getElementById("bjLobbyPlayers");
+    const rows = container.querySelectorAll(".bj-lobby-player-row");
+    if (rows.length <= 1) return; // always keep at least 1
+    row.remove();
+    // Re-number remaining rows
+    container.querySelectorAll(".bj-lobby-player-row").forEach((r, i) => {
+      r.dataset.row = i;
+      const dot = r.querySelector(".bj-lobby-seat-dot");
+      const inp = r.querySelector(".bj-lobby-name-input");
+      if (dot) { dot.textContent = i + 1; dot.style.background = SEAT_COLORS[i % SEAT_COLORS.length]; }
+      if (inp) inp.placeholder = `Player ${i + 1}`;
+    });
+    this._refreshLobbyButtons();
+  }
+
+  _refreshLobbyButtons() {
+    const container = document.getElementById("bjLobbyPlayers");
+    const addBtn    = document.getElementById("bjAddPlayerBtn");
+    const startBtn  = document.getElementById("bjStartGameBtn");
+    if (!container) return;
+    const count = container.querySelectorAll(".bj-lobby-player-row").length;
+    if (addBtn)   addBtn.disabled = count >= MAX_PLAYERS;
+    if (startBtn) startBtn.disabled = count < 1;
+  }
+
+  _bindLobbyButtons() {
+    const addBtn   = document.getElementById("bjAddPlayerBtn");
+    const startBtn = document.getElementById("bjStartGameBtn");
+    const backBtn  = document.getElementById("bjLobbyBackBtn");
+
+    if (addBtn) {
+      addBtn.addEventListener("click", () => {
+        const container = document.getElementById("bjLobbyPlayers");
+        const rows = container.querySelectorAll(".bj-lobby-player-row");
+        if (rows.length >= MAX_PLAYERS) return;
+        this._appendLobbyRow(container, `Player ${rows.length + 1}`, rows.length);
+        this._refreshLobbyButtons();
+        // Focus the new input
+        const newInput = container.lastElementChild?.querySelector("input");
+        if (newInput) { newInput.select(); newInput.focus(); }
+      });
+    }
+
+    if (startBtn) {
+      startBtn.addEventListener("click", () => this._startGame());
+    }
+
+    if (backBtn) {
+      backBtn.addEventListener("click", () => {
+        // Navigate back to game chooser
+        document.getElementById("bjBackToChooserBtn")?.click();
+      });
+    }
+  }
+
+  _startGame() {
+    const container = document.getElementById("bjLobbyPlayers");
+    const rows = container.querySelectorAll(".bj-lobby-player-row");
+    const names = Array.from(rows).map(r => {
+      const inp = r.querySelector(".bj-lobby-name-input");
+      const val = inp?.value.trim();
+      return val || inp?.placeholder || "Player";
+    });
+
+    // Re-initialise engine with these players
+    this.engine.setupPlayers(names);
+    this.engine.buildShoe();
+
+    // Reset challenges
+    this._challenges = getDailyChallenges();
+    this._wentBelowHalf = {};
+
+    // Wire up game buttons (only after players are set)
+    this._bindGameButtons();
+    this._renderChipSelector();
+    this._renderPlayerSeats();
+    this._renderChallenges();
+    this._syncView();
+
+    this._hideLobby();
+    this._playSound("bjShuffle");
+  }
+
+  // ─── Game Button Wiring ────────────────────────────────────────────────────
+
+  _bindGameButtons() {
     const el = this.elements;
 
-    // Chip selector — event delegation
-    el.bjChipSelector.addEventListener("click", e => {
-      const btn = e.target.closest("[data-bj-chip]");
-      if (!btn || btn.disabled) return;
-      const value = parseInt(btn.dataset.bjChip, 10);
-      const res = this.engine.addBet(value);
-      if (res.ok) {
-        this._playSound("bjChip");
-        this._animateChipToBetArea(btn, value);
-        this._updateBetDisplay();
-      } else {
-        this._shake(el.bjBetAmount);
-      }
-    });
+    // Remove old listeners by replacing nodes (avoids double-binding on re-entry)
+    const repl = id => {
+      const old = document.getElementById(id);
+      if (!old) return old;
+      const clone = old.cloneNode(true);
+      old.parentNode.replaceChild(clone, old);
+      return clone;
+    };
 
-    el.bjClearBetBtn.addEventListener("click", () => {
-      if (this.engine.clearBet().ok) {
-        this._updateBetDisplay();
-        el.bjChipsDisplay.innerHTML = "";
-      }
-    });
+    const chipSel     = repl("bjChipSelector");
+    const clearBtn    = repl("bjClearBetBtn");
+    const nextPlyBtn  = repl("bjNextPlayerBtn");
+    const dealBtn     = repl("bjDealBtn");
+    const hitBtn      = repl("bjHitBtn");
+    const standBtn    = repl("bjStandBtn");
+    const doubleBtn   = repl("bjDoubleBtn");
+    const splitBtn    = repl("bjSplitBtn");
+    const nextRndBtn  = repl("bjNextRoundBtn");
+    const newShoeBtn  = repl("bjNewShoeBtn");
 
-    el.bjDealBtn.addEventListener("click", () => this._startRound());
-    el.bjHitBtn.addEventListener("click",   () => this._actionHit());
-    el.bjStandBtn.addEventListener("click", () => this._actionStand());
-    el.bjDoubleBtn.addEventListener("click",() => this._actionDouble());
-    el.bjSplitBtn.addEventListener("click", () => this._actionSplit());
+    // Update element refs after replacement
+    this.elements.bjChipSelector    = chipSel      || el.bjChipSelector;
+    this.elements.bjClearBetBtn     = clearBtn     || el.bjClearBetBtn;
+    this.elements.bjNextPlayerBtn   = nextPlyBtn;
+    this.elements.bjDealBtn         = dealBtn      || el.bjDealBtn;
+    this.elements.bjHitBtn          = hitBtn       || el.bjHitBtn;
+    this.elements.bjStandBtn        = standBtn     || el.bjStandBtn;
+    this.elements.bjDoubleBtn       = doubleBtn    || el.bjDoubleBtn;
+    this.elements.bjSplitBtn        = splitBtn     || el.bjSplitBtn;
+    this.elements.bjNextRoundBtn    = nextRndBtn   || el.bjNextRoundBtn;
 
-    // "Next Round" is inside the outcome overlay card
-    el.bjNextRoundBtn.addEventListener("click", () => this._nextRound());
-    el.bjNewShoeBtn.addEventListener("click",   () => {
-      this.engine.buildShoe();
-      this._setStatus("New shoe shuffled — place your bet.");
-      this._syncView();
-    });
+    if (this.elements.bjChipSelector) {
+      this.elements.bjChipSelector.addEventListener("click", e => {
+        const btn = e.target.closest("[data-bj-chip]");
+        if (!btn || btn.disabled) return;
+        const value = parseInt(btn.dataset.bjChip, 10);
+        const res = this.engine.addBet(value);
+        if (res.ok) {
+          this._playSound("bjChip");
+          const bettingPlayerId = this.engine.bettingPlayer?.id;
+          this._animateChipToSeat(btn, value, bettingPlayerId);
+          this._updateBettingView();
+        } else {
+          this._shake(this.elements.bjBetAmount);
+        }
+      });
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        if (this.engine.clearBet().ok) {
+          this._clearSeatChips(this.engine.bettingPlayerIndex);
+          this._updateBettingView();
+        }
+      });
+    }
+
+    if (nextPlyBtn) {
+      nextPlyBtn.addEventListener("click", () => this._advanceBetting());
+    }
+
+    if (dealBtn) {
+      dealBtn.addEventListener("click", () => this._startRound());
+    }
+
+    if (hitBtn)    hitBtn.addEventListener("click",    () => this._actionHit());
+    if (standBtn)  standBtn.addEventListener("click",  () => this._actionStand());
+    if (doubleBtn) doubleBtn.addEventListener("click", () => this._actionDouble());
+    if (splitBtn)  splitBtn.addEventListener("click",  () => this._actionSplit());
+
+    if (nextRndBtn) nextRndBtn.addEventListener("click", () => this._nextRound());
+    if (newShoeBtn) {
+      newShoeBtn.addEventListener("click", () => {
+        this.engine.buildShoe();
+        this._setStatus("New shoe shuffled — place your bets.");
+        this._syncView();
+      });
+    }
   }
 
   // ─── Chip Selector ─────────────────────────────────────────────────────────
 
   _renderChipSelector() {
     const container = this.elements.bjChipSelector;
+    if (!container) return;
     container.innerHTML = "";
     for (const chip of CHIP_DENOMINATIONS) {
       const btn = document.createElement("button");
       btn.type = "button";
-      // data attr for delegation; both base + denomination classes for styling
       btn.dataset.bjChip = chip.value;
       btn.className = `bj-chip bj-chip--selector ${chip.cls}`;
       btn.setAttribute("aria-label", `Bet ${chip.label}`);
@@ -120,10 +312,91 @@ export class BlackjackUI {
     }
   }
 
+  // ─── Player Seats ──────────────────────────────────────────────────────────
+
+  _renderPlayerSeats() {
+    const container = document.getElementById("bjPlayerSeats");
+    if (!container) return;
+    container.innerHTML = "";
+
+    const count = this.engine.players.length;
+    container.dataset.playerCount = count;
+
+    for (const p of this.engine.players) {
+      const seat = document.createElement("div");
+      seat.className = "bj-player-seat";
+      seat.dataset.playerId = p.id;
+      seat.style.setProperty("--seat-color", SEAT_COLORS[p.id % SEAT_COLORS.length]);
+
+      seat.innerHTML = `
+        <div class="bj-seat-header">
+          <span class="bj-seat-dot"></span>
+          <span class="bj-seat-name">${this._esc(p.name)}</span>
+          <span class="bj-seat-balance">$${p.balance.toLocaleString()}</span>
+        </div>
+        <div class="bj-seat-chips" data-pid="${p.id}"></div>
+        <div class="bj-seat-bet-amount" data-pid="${p.id}"></div>
+        <div class="bj-seat-hands" data-pid="${p.id}"></div>
+        <div class="bj-seat-result" data-pid="${p.id}"></div>
+      `;
+      container.appendChild(seat);
+    }
+  }
+
+  _getSeat(playerId) {
+    return document.querySelector(`.bj-player-seat[data-player-id="${playerId}"]`);
+  }
+
+  _updateSeatHeader(playerId) {
+    const p = this.engine.players.find(pl => pl.id === playerId);
+    if (!p) return;
+    const seat = this._getSeat(playerId);
+    if (!seat) return;
+    const balEl = seat.querySelector(".bj-seat-balance");
+    if (balEl) balEl.textContent = `$${p.balance.toLocaleString()}`;
+  }
+
+  _setSeatState(playerId, state) {
+    const seat = this._getSeat(playerId);
+    if (!seat) return;
+    seat.classList.remove("bj-seat--betting", "bj-seat--active", "bj-seat--done", "bj-seat--bust", "bj-seat--blackjack");
+    if (state) seat.classList.add(`bj-seat--${state}`);
+  }
+
+  _clearSeatHands(playerId) {
+    const seat = this._getSeat(playerId);
+    if (!seat) return;
+    const handsEl = seat.querySelector(".bj-seat-hands");
+    if (handsEl) handsEl.innerHTML = "";
+    const resEl = seat.querySelector(".bj-seat-result");
+    if (resEl) resEl.innerHTML = "";
+  }
+
+  _clearSeatChips(playerIndex) {
+    const pid = this.engine.players[playerIndex]?.id;
+    if (pid == null) return;
+    const seat = this._getSeat(pid);
+    if (!seat) return;
+    const chipsEl = seat.querySelector(".bj-seat-chips");
+    if (chipsEl) chipsEl.innerHTML = "";
+    const betAmtEl = seat.querySelector(".bj-seat-bet-amount");
+    if (betAmtEl) betAmtEl.textContent = "";
+  }
+
+  _showSeatResult(playerId, text, type) {
+    const seat = this._getSeat(playerId);
+    if (!seat) return;
+    const resEl = seat.querySelector(".bj-seat-result");
+    if (resEl) {
+      resEl.textContent = text;
+      resEl.className = `bj-seat-result bj-seat-result--${type}`;
+    }
+  }
+
   // ─── Challenge Panel ───────────────────────────────────────────────────────
 
   _renderChallenges() {
-    const panel = this.elements.bjChallengesPanel;
+    const panel = document.getElementById("bjChallengesPanel");
     if (!panel) return;
     panel.innerHTML = `
       <div class="bj-ch-header">
@@ -156,44 +429,43 @@ export class BlackjackUI {
 
     const badge = document.getElementById("bjStreakBadge");
     if (badge) {
-      const streak = this.engine.stats.currentStreak;
-      badge.textContent = `🔥 Streak: ${streak}`;
-      badge.className = `bj-ch-streak${streak >= 3 ? " bj-ch-streak--hot" : ""}`;
+      // Use best streak across all players
+      const maxStreak = Math.max(0, ...this.engine.players.map(p => p.stats.currentStreak));
+      badge.textContent = `🔥 Streak: ${maxStreak}`;
+      badge.className = `bj-ch-streak${maxStreak >= 3 ? " bj-ch-streak--hot" : ""}`;
     }
   }
 
-  /** Evaluate challenges after every round. Returns total bonus earned. */
-  _evaluateChallenges(results) {
-    const stats = this.engine.stats;
-    const won   = results.some(r => r.result === "win" || r.result === "blackjack");
-    let bonus   = 0;
+  _evaluateChallenges(allResults) {
+    // allResults: array of { playerId, playerName, results[] }
+    const bestStreak = Math.max(0, ...this.engine.players.map(p => p.stats.currentStreak));
+    const anyWin     = allResults.some(pr => pr.results.some(r => r.result === "win" || r.result === "blackjack"));
+    const anyBJ      = allResults.some(pr => pr.results.some(r => r.result === "blackjack"));
+    const anyDoubleWin = anyWin && this.engine.players.some(p => p.stats.lastWasDouble);
+    const bestShoe   = Math.max(0, ...this.engine.players.map(p => p.stats.handsInCurrentShoe));
+
+    let bonus = 0;
     const earned = [];
 
     for (const ch of this._challenges) {
       if (ch.done || ch.bonusPaid) continue;
-      let before = ch.progress;
       switch (ch.type) {
-        case "streak":
-          ch.progress = stats.currentStreak;
+        case "streak":    ch.progress = bestStreak; break;
+        case "double":    if (anyDoubleWin) ch.progress++; break;
+        case "shoe":      ch.progress = anyWin ? bestShoe : ch.progress; break;
+        case "blackjack": if (anyBJ) ch.progress++; break;
+        case "comeback": {
+          const wentBelow = Object.values(this._wentBelowHalf).some(Boolean);
+          if (wentBelow && anyWin) ch.progress++;
           break;
-        case "double":
-          if (won && stats.lastWasDouble) ch.progress++;
-          break;
-        case "shoe":
-          ch.progress = won ? stats.handsInCurrentShoe : ch.progress;
-          break;
-        case "blackjack":
-          if (results.some(r => r.result === "blackjack")) ch.progress++;
-          break;
-        case "comeback":
-          if (this._wentBelowHalf && won) ch.progress++;
-          break;
+        }
       }
       if (ch.progress >= ch.goal && !ch.done) {
         ch.done = true;
         ch.bonusPaid = true;
         const bonusAmt = ch.goal >= 5 ? 150 : ch.type === "streak" ? 100 : 75;
-        this.engine.balance += bonusAmt;
+        // Award bonus to all active players
+        for (const p of this.engine.activePlayers) p.balance += bonusAmt;
         bonus += bonusAmt;
         earned.push({ label: ch.label, bonusAmt });
       }
@@ -203,83 +475,228 @@ export class BlackjackUI {
     return { bonus, earned };
   }
 
+  // ─── Betting Flow ──────────────────────────────────────────────────────────
+
+  _syncView() {
+    const phase = this.engine.phase;
+    this._renderPlayerSeats(); // rebuild seats with fresh state
+    this._renderShoeIndicator();
+    this._updateChallengeList();
+    this._showActionControls(false);
+
+    if (phase === "idle") {
+      this._enterBettingPhase();
+    }
+
+    this._setStatus("Place your bets!");
+  }
+
+  _enterBettingPhase() {
+    this.engine.bettingPlayerIndex = 0;
+    this._updateBettingView();
+    this._showBettingControls(true);
+  }
+
+  _updateBettingView() {
+    const p = this.engine.bettingPlayer;
+    if (!p) return;
+
+    // Highlight the active betting seat
+    for (const pl of this.engine.players) this._setSeatState(pl.id, null);
+    this._setSeatState(p.id, "betting");
+
+    // Update right-side info
+    const balEl  = document.getElementById("bjBalance");
+    const betEl  = document.getElementById("bjBetAmount");
+    const lblEl  = document.getElementById("bjBetPlayerLabel");
+    if (balEl)  balEl.textContent = `$${p.balance.toLocaleString()}`;
+    if (betEl)  betEl.textContent = `$${p.currentBet}`;
+    if (lblEl)  lblEl.textContent = p.name.toUpperCase();
+
+    // Update seat bet amount display
+    for (const pl of this.engine.players) {
+      const seat = this._getSeat(pl.id);
+      if (!seat) continue;
+      const betAmtEl = seat.querySelector(".bj-seat-bet-amount");
+      if (betAmtEl) betAmtEl.textContent = pl.currentBet > 0 ? `$${pl.currentBet}` : "";
+    }
+
+    // Next/Deal button label
+    const nextBtn = document.getElementById("bjNextPlayerBtn");
+    const isLast  = this.engine.bettingPlayerIndex === this.engine.players.length - 1;
+    const anyBet  = this.engine.players.some(pl => pl.currentBet > 0);
+
+    if (nextBtn) {
+      if (isLast) {
+        nextBtn.textContent = anyBet ? "Deal ›" : "Skip & Deal ›";
+        nextBtn.classList.toggle("bj-btn-primary", anyBet);
+      } else {
+        nextBtn.textContent = p.currentBet > 0 ? "Next Player →" : "Skip →";
+        nextBtn.classList.add("bj-btn-primary");
+      }
+      nextBtn.disabled = false;
+    }
+
+    // Chip buttons enabled only in idle
+    this.elements.bjChipSelector?.querySelectorAll("[data-bj-chip]").forEach(b => {
+      b.disabled = this.engine.phase !== "idle";
+    });
+
+    // Status
+    this._setStatus(`${p.name}: place your bet, then click Next.`);
+  }
+
+  _advanceBetting() {
+    const result = this.engine.advanceBettingPlayer();
+    if (result.done) {
+      // All players have had a chance — deal if anyone has a bet
+      const anyBet = this.engine.players.some(p => p.currentBet > 0);
+      if (!anyBet) {
+        this._setStatus("At least one player must bet. Place a bet first!");
+        this._shake(document.getElementById("bjChipSelector"));
+        // Reset to player 0
+        this.engine.bettingPlayerIndex = 0;
+        this._updateBettingView();
+        return;
+      }
+      this._startRound();
+    } else {
+      this._updateBettingView();
+    }
+  }
+
+  _showBettingControls(show) {
+    const bettingCtrl = document.getElementById("bjBettingControls");
+    if (bettingCtrl) bettingCtrl.classList.toggle("bj-hidden", !show);
+  }
+
   // ─── Round Flow ────────────────────────────────────────────────────────────
 
   async _startRound() {
     if (this.engine.phase !== "idle") return;
-    if (this.engine.currentBet <= 0) {
-      this._setStatus("Place a bet first!");
-      this._shake(this.elements.bjChipSelector);
+    const anyBet = this.engine.players.some(p => p.currentBet > 0);
+    if (!anyBet) {
+      this._setStatus("At least one player must bet!");
       return;
     }
 
     // Track comeback challenge
-    if (this.engine.balance < this.engine.startingBalance / 2) {
-      this._wentBelowHalf = true;
+    for (const p of this.engine.players) {
+      if (p.balance < this.engine.startingBalance / 2) {
+        this._wentBelowHalf[p.id] = true;
+      }
     }
 
+    this._showBettingControls(false);
     this._showActionControls(false);
-    this._clearTable();
 
     const res = this.engine.startRound();
     if (!res.ok) {
-      const msg = res.reason === "insufficient_balance"
-        ? "Insufficient balance — clear bet or go all-in!"
-        : "Cannot start round.";
-      this._setStatus(msg);
-      this._showActionControls(false); // restore betting view
+      this._setStatus("Cannot start round: " + res.reason);
+      this._showBettingControls(true);
       return;
     }
 
-    this._updateBetDisplay();
+    // Clear old hands in all seats
+    for (const p of this.engine.players) {
+      this._clearSeatHands(p.id);
+      this._setSeatState(p.id, null);
+    }
+
     this._playSound("bjDeal");
 
-    // Classic deal order: Player · Dealer · Player · Dealer (hole)
+    // Animate deal in standard casino order
     const s = this.engine.getState();
+
+    // Round 1: each active player gets card 1
+    for (const ap of s.activePlayers) {
+      await this._dealCardToSeat(ap.id, 0, ap.playerHands[0][0]);
+    }
+    // Dealer card 1
     await this._dealCard("dealer", 0, s.dealerHand[0]);
-    await this._dealCard("player", 0, s.playerHands[0][0]);
-    await this._dealCard("dealer", 1, s.dealerHand[1]); // face-down hole
-    await this._dealCard("player", 0, s.playerHands[0][1]);
-    this._renderValues();
+
+    // Round 2: each active player gets card 2
+    for (const ap of s.activePlayers) {
+      await this._dealCardToSeat(ap.id, 0, ap.playerHands[0][1]);
+    }
+    // Dealer hole (face-down)
+    await this._dealCard("dealer", 1, s.dealerHand[1]);
+
+    this._renderAllValues();
 
     if (res.event === "natural_check") {
-      await this._handleNaturals(res.playerBlackjack, res.dealerBlackjack);
+      await this._handleNaturals(res.dealerBlackjack, res.naturalPlayerIds);
       return;
     }
+
+    this._enterPlayerTurn();
+  }
+
+  async _handleNaturals(dealerBJ, naturalPlayerIds) {
+    await this._sleep(450);
+    if (dealerBJ) await this._flipHole();
+
+    const outcome = this.engine.settleNaturals(dealerBJ, naturalPlayerIds);
+    this._renderAllValues();
+
+    // Show per-player natural results on their seats
+    for (const r of outcome.results) {
+      let label, type;
+      if (r.result === "blackjack")        { label = "BLACKJACK! 🃏"; type = "blackjack"; }
+      else if (r.result === "push")        { label = "PUSH";          type = "push"; }
+      else                                 { label = "DEALER BJ";     type = "lose"; }
+      this._showSeatResult(r.playerId, label, type);
+      this._setSeatState(r.playerId, r.result === "blackjack" ? "blackjack" : "done");
+    }
+
+    if (naturalPlayerIds.length > 0 && !dealerBJ) this._playSound("bjBlackjack");
+    else if (dealerBJ) this._playSound("bjLose");
+
+    // Check if more players remain to play
+    if (this.engine.phase === "player" && this.engine.activePlayers.length > 0) {
+      await this._sleep(600);
+      this._enterPlayerTurn();
+      return;
+    }
+
+    // All settled via naturals
+    const { bonus, earned } = this._evaluateChallenges(
+      this.engine.players
+        .filter(p => p.lastResults.length > 0)
+        .map(p => ({ playerId: p.id, playerName: p.name, results: p.lastResults }))
+    );
+    this._updateAllSeatBalances();
+    await this._sleep(400);
+    this._showMultiOutcome(outcome.results, earned, bonus, true);
+    if (naturalPlayerIds.length > 0 && !dealerBJ) this._launchConfetti();
+  }
+
+  _enterPlayerTurn() {
+    if (this.engine.phase !== "player") return;
+    const ap = this.engine.activePlayer;
+    if (!ap) return;
+
+    // Highlight active player's seat
+    for (const p of this.engine.activePlayers) this._setSeatState(p.id, null);
+    this._setSeatState(ap.id, "active");
+
+    // Update right side to active player
+    const balEl = document.getElementById("bjBalance");
+    const betEl = document.getElementById("bjBetAmount");
+    const lblEl = document.getElementById("bjBetPlayerLabel");
+    if (balEl) balEl.textContent = `$${ap.balance.toLocaleString()}`;
+    if (betEl) betEl.textContent = `$${ap.handBets[ap.activeHandIndex] ?? ap.currentBet}`;
+    if (lblEl) lblEl.textContent = ap.name.toUpperCase();
+
+    const multi = this.engine.activePlayers.length > 1;
+    const handNum = ap.playerHands.length > 1 ? ` (Hand ${ap.activeHandIndex + 1})` : "";
+    this._setStatus(multi
+      ? `${ap.name}'s turn${handNum} — Hit, Stand, Double, or Split?`
+      : `Your turn${handNum} — Hit, Stand, Double, or Split?`
+    );
 
     this._refreshActionButtons();
     this._showActionControls(true);
-    this._setStatus("Your turn — Hit, Stand, Double, or Split?");
-  }
-
-  async _handleNaturals(playerBJ, dealerBJ) {
-    await this._sleep(450);
-    if (dealerBJ) await this._flipHole();
-    const outcome = this.engine.settleNaturals(playerBJ, dealerBJ);
-    this._renderValues();
-
-    let title, detail, type;
-    if (outcome.result === "blackjack") {
-      title  = "BLACKJACK!";
-      detail = `+$${Math.floor(this.engine.handBets[0] * 1.5)} (3:2 payout)`;
-      type   = "blackjack";
-      this._playSound("bjBlackjack");
-    } else if (outcome.result === "push") {
-      title  = "PUSH";
-      detail = "Bet returned — both have Blackjack";
-      type   = "push";
-    } else {
-      title  = "DEALER BLACKJACK";
-      detail = "Better luck next hand";
-      type   = "lose";
-      this._playSound("bjLose");
-    }
-
-    const { bonus, earned } = this._evaluateChallenges([{ result: outcome.result }]);
-    this._updateBalanceDisplay();
-    await this._sleep(250);
-    this._showOutcome(title, detail, type, earned, bonus);
-    if (type === "blackjack") this._launchConfetti();
   }
 
   async _actionHit() {
@@ -289,216 +706,248 @@ export class BlackjackUI {
     const res = this.engine.hit();
     if (!res.ok) { this._showActionControls(true); return; }
 
-    const s    = this.engine.getState();
-    const hand = s.playerHands[s.activeHandIndex];
-    await this._dealCard("player", s.activeHandIndex, hand[hand.length - 1]);
-    this._renderValues();
+    const p    = this.engine.activePlayers.find(pl => pl.id === res.playerId);
+    const hand = p.playerHands[p.activeHandIndex];
+    await this._dealCardToSeat(res.playerId, p.activeHandIndex, hand[hand.length - 1]);
+    this._renderAllValues();
     this._playSound("bjDeal");
 
     if (res.event === "bust") {
-      this._setStatus("Bust! 💥");
+      this._setStatus(`${p.name} busts! 💥`);
+      this._setSeatState(p.id, "bust");
+      this._showSeatResult(p.id, "BUST", "lose");
       await this._sleep(600);
-      // Bust does not auto-advance engine phase; close this hand explicitly.
       this.engine.stand();
-      if (this.engine.phase === "dealer") {
-        await this._runDealerPhase();
-      } else {
-        this._refreshActionButtons();
-        this._showActionControls(true);
-        this._setStatus(`Playing hand ${this.engine.activeHandIndex + 1}…`);
-      }
+      await this._afterPlayerAction();
       return;
     }
     if (res.event === "twenty_one") {
       this.engine.stand();
-      if (this.engine.phase === "dealer") { await this._runDealerPhase(); return; }
+      await this._afterPlayerAction();
+      return;
     }
 
     this._refreshActionButtons();
     this._showActionControls(true);
-    this._setStatus("Your turn.");
+    this._setStatus(`${p.name}: Hit or Stand?`);
   }
 
   async _actionStand() {
     if (this.engine.phase !== "player") return;
     this._showActionControls(false);
     this.engine.stand();
-    if (this.engine.phase === "dealer") {
-      await this._runDealerPhase();
-    } else {
-      this._refreshActionButtons();
-      this._showActionControls(true);
-      this._setStatus(`Playing hand ${this.engine.activeHandIndex + 1}…`);
-    }
+    await this._afterPlayerAction();
   }
 
   async _actionDouble() {
     if (this.engine.phase !== "player") return;
     this._showActionControls(false);
+    const ap  = this.engine.activePlayer;
+    const pid = ap?.id;
     const res = this.engine.doubleDown();
     if (!res.ok) { this._showActionControls(true); return; }
 
-    const handIdx = res.handIndex ?? this.engine.activeHandIndex;
-    const hand    = this.engine.playerHands[handIdx];
-    await this._dealCard("player", handIdx, hand[hand.length - 1]);
-    this._updateBetDisplay();
-    this._renderValues();
+    const p    = this.engine.players.find(pl => pl.id === pid) ?? ap;
+    const hand = p.playerHands[p.activeHandIndex];
+    await this._dealCardToSeat(pid, p.activeHandIndex, hand[hand.length - 1]);
+    this._renderAllValues();
+    this._updateSeatHeader(pid);
     this._playSound("bjDeal");
-
-    if (this.engine.phase === "dealer") {
-      await this._runDealerPhase();
-    } else {
-      this._refreshActionButtons();
-      this._showActionControls(true);
-    }
+    await this._afterPlayerAction();
   }
 
   async _actionSplit() {
     if (this.engine.phase !== "player") return;
     this._showActionControls(false);
+    const pid = this.engine.activePlayer?.id;
     const res = this.engine.split();
     if (!res.ok) { this._showActionControls(true); return; }
 
     this._playSound("bjChip");
-    this._clearTable();
-    const s = this.engine.getState();
-    for (let hi = 0; hi < s.playerHands.length; hi++) {
-      for (const card of s.playerHands[hi]) {
-        await this._dealCard("player", hi, card);
+
+    // Rebuild this player's hands from scratch
+    const p = this.engine.activePlayers.find(pl => pl.id === pid);
+    this._clearSeatHands(pid);
+    for (let hi = 0; hi < p.playerHands.length; hi++) {
+      for (const card of p.playerHands[hi]) {
+        await this._dealCardToSeat(pid, hi, card);
       }
     }
-    this._renderValues();
-    this._updateBetDisplay();
+    this._renderAllValues();
+    this._updateSeatHeader(pid);
     this._refreshActionButtons();
     this._showActionControls(true);
-    this._setStatus(`Split — playing hand ${this.engine.activeHandIndex + 1} of ${s.playerHands.length}`);
+    const ap = this.engine.activePlayer;
+    this._setStatus(`${ap.name}: Split — playing hand ${ap.activeHandIndex + 1} of ${ap.playerHands.length}`);
+  }
+
+  async _afterPlayerAction() {
+    if (this.engine.phase === "dealer") {
+      await this._runDealerPhase();
+    } else if (this.engine.phase === "player") {
+      // Check if we switched to a new player
+      const ap = this.engine.activePlayer;
+      if (ap) {
+        // Brief pause when moving to next player
+        const prevSeat = document.querySelector(".bj-player-seat.bj-seat--active");
+        if (prevSeat && prevSeat.dataset.playerId !== String(ap.id)) {
+          await this._sleep(400);
+        }
+        this._enterPlayerTurn();
+      }
+    }
   }
 
   async _runDealerPhase() {
     if (this.engine.phase !== "dealer") return;
+
+    // Reset seat highlights
+    for (const p of this.engine.activePlayers) this._setSeatState(p.id, null);
+
     await this._flipHole();
-    this._renderValues();
+    this._renderAllValues();
     await this._sleep(500);
 
+    this._setStatus("Dealer's turn…");
     const res = this.engine.dealerPlay();
     for (const card of res.drawn) {
       await this._dealCard("dealer", 0, card);
-      this._renderValues();
+      this._renderAllValues();
       this._playSound("bjDeal");
       await this._sleep(380);
     }
 
     await this._sleep(350);
     const settlement = this.engine.settle();
-    const { bonus, earned } = this._evaluateChallenges(settlement.results);
-    this._updateBalanceDisplay();
-    this._showSettlementOutcome(settlement.results, earned, bonus);
+
+    // Show per-player seat results
+    for (const pr of settlement.allPlayerResults) {
+      const wins   = pr.results.filter(r => r.result === "win").length;
+      const losses = pr.results.filter(r => r.result === "lose").length;
+      const pushes = pr.results.filter(r => r.result === "push").length;
+      let label, type;
+      if (wins > 0 && losses === 0)   { label = wins > 1 ? `WIN ×${wins}` : "WIN";   type = "win"; }
+      else if (losses > 0 && wins === 0 && pushes === 0) { label = "LOSE";  type = "lose"; }
+      else if (pushes === pr.results.length) { label = "PUSH"; type = "push"; }
+      else {
+        const net = pr.results.reduce((s, r) => s + (r.net - r.bet), 0);
+        label = net > 0 ? `+$${net}` : net < 0 ? `-$${Math.abs(net)}` : "PUSH";
+        type  = net > 0 ? "win" : net < 0 ? "lose" : "push";
+      }
+      this._showSeatResult(pr.playerId, label, type);
+      this._setSeatState(pr.playerId, type === "win" ? null : type === "push" ? null : "done");
+    }
+
+    const { bonus, earned } = this._evaluateChallenges(settlement.allPlayerResults);
+    this._updateAllSeatBalances();
+    this._showMultiOutcome(
+      settlement.allPlayerResults.flatMap(pr => pr.results.map(r => ({ ...r, playerId: pr.playerId, playerName: pr.playerName }))),
+      earned, bonus, false
+    );
+
+    const anyWin = settlement.allPlayerResults.some(pr => pr.results.some(r => r.result === "win"));
+    if (anyWin) this._launchConfetti();
   }
 
   _nextRound() {
     this._hideOutcome();
     this._stopConfetti();
     this.engine.resetForNextRound();
-    this.elements.bjChipsDisplay.innerHTML = "";
-    this._clearTable();
-    this._syncView();
 
-    // Bankrupt check
-    if (this.engine.balance <= 0) {
-      this._showBankrupt();
+    // Clear all seats visually
+    for (const p of this.engine.players) {
+      this._clearSeatHands(p.id);
+      this._clearSeatChips(p.id);
+      this._setSeatState(p.id, null);
+      this._updateSeatHeader(p.id);
     }
+    this._clearDealerHand();
+
+    // Check bankrupt players
+    const bankruptPlayers = this.engine.players.filter(p => p.balance <= 0);
+    for (const p of bankruptPlayers) {
+      p.balance = 1000;
+      p.stats.currentStreak = 0;
+      this._updateSeatHeader(p.id);
+    }
+    if (bankruptPlayers.length > 0) {
+      const names = bankruptPlayers.map(p => p.name).join(", ");
+      this._setStatus(`${names} went bankrupt — restarting with $1,000.`);
+    }
+
+    this._enterBettingPhase();
+    this._renderShoeIndicator();
+    this._updateChallengeList();
   }
 
   // ─── DOM State Sync ────────────────────────────────────────────────────────
 
-  /** Master sync: called on init, nextRound, new shoe. */
-  _syncView() {
-    const phase = this.engine.phase;
-    this._updateBalanceDisplay();
-    this._updateBetDisplay();
-    this._renderShoeIndicator();
-    this._updateChallengeList();
-
-    // Betting controls: visible only when idle
-    this.elements.bjBettingControls.classList.toggle("bj-hidden", phase !== "idle");
-    // Action controls: always hidden on sync (re-shown after deal)
-    this.elements.bjActionControls.classList.add("bj-hidden");
-
-    this._setStatus(
-      phase === "idle"    ? "Place your bet and deal to begin."
-      : phase === "settled" ? "Round over."
-      : "In progress."
-    );
-  }
-
   _showActionControls(show) {
-    const phase = this.engine.phase;
-    this.elements.bjActionControls.classList.toggle("bj-hidden", !show);
-    // Betting controls: only visible when in idle phase AND action controls hidden
-    this.elements.bjBettingControls.classList.toggle("bj-hidden", show || phase !== "idle");
+    const ctrl = document.getElementById("bjActionControls");
+    if (ctrl) ctrl.classList.toggle("bj-hidden", !show);
+    this._showBettingControls(!show && this.engine.phase === "idle");
   }
 
-  _clearTable() {
-    this.elements.bjDealerHand.innerHTML = "";
-    this.elements.bjPlayerHandWrapper.innerHTML = "";
-    this.elements.bjDealerValue.textContent = "";
+  _clearDealerHand() {
+    const dh = document.getElementById("bjDealerHand");
+    if (dh) dh.innerHTML = "";
+    const dv = document.getElementById("bjDealerValue");
+    if (dv) dv.textContent = "";
   }
 
-  _renderValues() {
+  _renderAllValues() {
     const s = this.engine.getState();
 
-    // Dealer — only count visible cards
+    // Dealer
     const vis = s.dealerHand.filter(c => !c.faceDown);
-    if (vis.length) {
-      const val = this.engine.handValue(vis);
-      const soft = this.engine.isSoft(vis);
-      this.elements.bjDealerValue.textContent = `${val}${soft ? " (soft)" : ""}`;
-    } else {
-      this.elements.bjDealerValue.textContent = "";
+    const dvEl = document.getElementById("bjDealerValue");
+    if (dvEl) {
+      if (vis.length) {
+        const val  = this.engine.handValue(vis);
+        const soft = this.engine.isSoft(vis);
+        dvEl.textContent = `${val}${soft ? " (soft)" : ""}`;
+      } else {
+        dvEl.textContent = "";
+      }
     }
 
-    // Player hands
-    const groups = this.elements.bjPlayerHandWrapper.querySelectorAll(".bj-hand-group");
-    groups.forEach((g, i) => {
-      const hand = s.playerHands[i];
-      if (!hand) return;
-      const val  = this.engine.handValue(hand);
-      const bust = this.engine.isBust(hand);
-      const soft = this.engine.isSoft(hand);
-      const active = i === s.activeHandIndex && s.phase === "player";
-      const lbl  = g.querySelector(".bj-hand-value");
-      if (lbl) {
-        lbl.textContent = bust ? `${val} — BUST` : `${val}${soft ? " (soft)" : ""}`;
-        lbl.className = `bj-hand-value${bust ? " bj-hand-value--bust" : ""}`;
-      }
-      g.classList.toggle("bj-hand-group--active", active);
-    });
+    // Each active player's seat hands
+    for (const p of this.engine.activePlayers) {
+      const seat = this._getSeat(p.id);
+      if (!seat) continue;
+      const groups = seat.querySelectorAll(".bj-hand-group");
+      groups.forEach((g, i) => {
+        const hand = p.playerHands[i];
+        if (!hand) return;
+        const val    = this.engine.handValue(hand);
+        const bust   = this.engine.isBust(hand);
+        const soft   = this.engine.isSoft(hand);
+        const active = i === p.activeHandIndex && s.phase === "player"
+                       && this.engine.activePlayer?.id === p.id;
+        const lbl = g.querySelector(".bj-hand-value");
+        if (lbl) {
+          lbl.textContent = bust ? `${val} — BUST` : `${val}${soft ? " (soft)" : ""}`;
+          lbl.className = `bj-hand-value${bust ? " bj-hand-value--bust" : ""}`;
+        }
+        g.classList.toggle("bj-hand-group--active", active);
+      });
+    }
   }
 
-  _updateBalanceDisplay() {
-    const b = this.engine.balance;
-    this.elements.bjBalance.textContent = `$${b.toLocaleString()}`;
-  }
-
-  _updateBetDisplay() {
-    const bet   = this.engine.currentBet;
-    const idle  = this.engine.phase === "idle";
-    this.elements.bjBetAmount.textContent = `$${bet}`;
-    this.elements.bjDealBtn.disabled = !idle || bet <= 0;
-    this.elements.bjClearBetBtn.disabled = !idle;
-    this.elements.bjChipSelector.querySelectorAll("[data-bj-chip]").forEach(b => {
-      b.disabled = !idle;
-    });
+  _updateAllSeatBalances() {
+    for (const p of this.engine.players) this._updateSeatHeader(p.id);
   }
 
   _refreshActionButtons() {
     const s = this.engine.getState();
-    this.elements.bjDoubleBtn.disabled = !s.canDouble;
-    this.elements.bjSplitBtn.disabled  = !s.canSplit;
+    const dbl = document.getElementById("bjDoubleBtn");
+    const spl = document.getElementById("bjSplitBtn");
+    if (dbl) dbl.disabled = !s.canDouble;
+    if (spl) spl.disabled = !s.canSplit;
   }
 
   _renderShoeIndicator() {
-    const el = this.elements.bjShoeIndicator;
+    const el = document.getElementById("bjShoeIndicator");
     if (!el) return;
     const pct  = Math.round(this.engine.shoePenetration * 100);
     const warn = this.engine.reshuffleNeeded;
@@ -507,33 +956,47 @@ export class BlackjackUI {
   }
 
   _setStatus(text) {
-    this.elements.bjStatus.textContent = text;
+    const el = document.getElementById("bjStatus");
+    if (el) el.textContent = text;
   }
 
   // ─── Card Rendering ────────────────────────────────────────────────────────
+
+  async _dealCardToSeat(playerId, handIndex, card) {
+    const el = this._createCard(card);
+    const seat = this._getSeat(playerId);
+    if (!seat) return;
+
+    const handsEl = seat.querySelector(".bj-seat-hands");
+    if (!handsEl) return;
+
+    let group = handsEl.querySelector(`.bj-hand-group[data-hi="${handIndex}"]`);
+    if (!group) {
+      group = document.createElement("div");
+      group.className = "bj-hand-group";
+      group.dataset.hi = handIndex;
+      const lbl = document.createElement("div");
+      lbl.className = "bj-hand-value";
+      group.appendChild(lbl);
+      const row = document.createElement("div");
+      row.className = "bj-hand-cards";
+      group.appendChild(row);
+      handsEl.appendChild(group);
+    }
+    group.querySelector(".bj-hand-cards").appendChild(el);
+    await this._animateDeal(el);
+  }
 
   async _dealCard(target, handIndex, card) {
     const el = this._createCard(card);
 
     if (target === "dealer") {
-      this.elements.bjDealerHand.appendChild(el);
+      const dh = document.getElementById("bjDealerHand");
+      if (dh) dh.appendChild(el);
     } else {
-      let group = this.elements.bjPlayerHandWrapper.querySelector(
-        `.bj-hand-group[data-hi="${handIndex}"]`
-      );
-      if (!group) {
-        group = document.createElement("div");
-        group.className = "bj-hand-group";
-        group.dataset.hi = handIndex;
-        const lbl = document.createElement("div");
-        lbl.className = "bj-hand-value";
-        group.appendChild(lbl);
-        const row = document.createElement("div");
-        row.className = "bj-hand-cards";
-        group.appendChild(row);
-        this.elements.bjPlayerHandWrapper.appendChild(group);
-      }
-      group.querySelector(".bj-hand-cards").appendChild(el);
+      // Legacy: target = player index (unused now but kept for safety)
+      const container = document.getElementById("bjPlayerSeats");
+      if (container) container.appendChild(el);
     }
 
     await this._animateDeal(el);
@@ -542,18 +1005,14 @@ export class BlackjackUI {
   _createCard(card) {
     const w = document.createElement("div");
     w.className = `bj-card${card.faceDown ? " bj-card--facedown" : " bj-card--" + SUIT_COLOR[card.suit]}`;
-
     const inner = document.createElement("div");
     inner.className = "bj-card-inner";
-
     const front = document.createElement("div");
     front.className = "bj-card-face bj-card-front";
     if (!card.faceDown) front.innerHTML = this._frontHTML(card);
-
     const back = document.createElement("div");
     back.className = "bj-card-face bj-card-back";
     back.innerHTML = `<div class="bj-card-back-pattern"></div>`;
-
     inner.appendChild(front);
     inner.appendChild(back);
     w.appendChild(inner);
@@ -573,30 +1032,30 @@ export class BlackjackUI {
 
   _animateDeal(cardEl) {
     return new Promise(resolve => {
-      const shoe     = this.elements.bjShoe;
+      const shoe     = document.getElementById("bjShoe");
+      if (!shoe) { resolve(); return; }
       const shoeRect = shoe.getBoundingClientRect();
       const cardRect = cardEl.getBoundingClientRect();
       const dx = shoeRect.left + shoeRect.width  / 2 - (cardRect.left + cardRect.width  / 2);
       const dy = shoeRect.top  + shoeRect.height / 2 - (cardRect.top  + cardRect.height / 2);
-
       cardEl.style.setProperty("--bj-dx", `${dx}px`);
       cardEl.style.setProperty("--bj-dy", `${dy}px`);
       cardEl.classList.add("bj-card--dealing");
-
       const done = () => {
         cardEl.classList.remove("bj-card--dealing");
         cardEl.removeEventListener("animationend", done);
         resolve();
       };
       cardEl.addEventListener("animationend", done);
-      setTimeout(resolve, 600); // fallback
+      setTimeout(resolve, 600);
     });
   }
 
   async _flipHole() {
-    const holeEl = this.elements.bjDealerHand.children[1];
+    const dh = document.getElementById("bjDealerHand");
+    if (!dh) return;
+    const holeEl = dh.children[1];
     if (!holeEl || !holeEl.classList.contains("bj-card--facedown")) return;
-
     holeEl.classList.add("bj-card--flipping");
     await this._sleep(180);
     holeEl.classList.remove("bj-card--facedown");
@@ -609,7 +1068,7 @@ export class BlackjackUI {
 
   // ─── Chip Animation ────────────────────────────────────────────────────────
 
-  _animateChipToBetArea(sourceBtn, value) {
+  _animateChipToSeat(sourceBtn, value, playerId) {
     const chip = CHIP_DENOMINATIONS.find(c => c.value === value);
     if (!chip) return;
     const ghost = document.createElement("div");
@@ -617,87 +1076,121 @@ export class BlackjackUI {
     ghost.innerHTML = `<span class="bj-chip-label">${chip.label}</span>`;
     document.body.appendChild(ghost);
 
-    const src = sourceBtn.getBoundingClientRect();
-    const tgt = this.elements.bjChipsDisplay.getBoundingClientRect();
-    ghost.style.cssText = `left:${src.left + src.width/2 - 26}px;top:${src.top + src.height/2 - 26}px`;
+    const src  = sourceBtn.getBoundingClientRect();
+    const seat = this._getSeat(playerId);
+    const tgtEl = seat ? seat.querySelector(".bj-seat-chips") : null;
+    const tgt  = tgtEl ? tgtEl.getBoundingClientRect() : src;
 
+    ghost.style.cssText = `left:${src.left + src.width/2 - 26}px;top:${src.top + src.height/2 - 26}px`;
     const dx = tgt.left + tgt.width/2  - src.left - src.width/2;
     const dy = tgt.top  + tgt.height/2 - src.top  - src.height/2;
+
     requestAnimationFrame(() => {
       ghost.style.transform = `translate(${dx}px,${dy}px) scale(0.7)`;
       ghost.style.opacity = "0";
     });
-    setTimeout(() => { document.body.removeChild(ghost); this._addChip(chip); }, 360);
+
+    setTimeout(() => {
+      document.body.removeChild(ghost);
+      if (tgtEl) this._addChipToSeat(tgtEl, chip);
+    }, 360);
   }
 
-  _addChip(chip) {
-    const stack   = this.elements.bjChipsDisplay;
-    const n       = stack.querySelectorAll(".bj-chip").length;
-    const el      = document.createElement("div");
-    el.className  = `bj-chip ${chip.cls}`;
-    el.style.setProperty("--off", `${Math.min(n * 5, 40)}px`);
-    el.innerHTML  = `<span class="bj-chip-label">${chip.label}</span>`;
-    stack.appendChild(el);
+  _addChipToSeat(container, chip) {
+    const n  = container.querySelectorAll(".bj-chip").length;
+    const el = document.createElement("div");
+    el.className = `bj-chip ${chip.cls}`;
+    el.style.setProperty("--off", `${Math.min(n * 4, 32)}px`);
+    el.innerHTML = `<span class="bj-chip-label">${chip.label}</span>`;
+    container.appendChild(el);
   }
 
   // ─── Outcome Overlay ───────────────────────────────────────────────────────
 
-  _showSettlementOutcome(results, earned, bonus) {
-    const wins   = results.filter(r => r.result === "win").length;
-    const losses = results.filter(r => r.result === "lose").length;
+  _showMultiOutcome(results, earned, bonus, isNaturalsRound) {
+    // results: flat array of { playerId, playerName, result, net, bet? }
+    //          OR from settle: allPlayerResults flattened
+
+    const el   = this.elements;
+    const wins  = results.filter(r => r.result === "win" || r.result === "blackjack").length;
+    const loses = results.filter(r => r.result === "lose" || r.result === "dealer_blackjack").length;
     const pushes = results.filter(r => r.result === "push").length;
-    const totalBet = results.reduce((s, r) => s + r.bet, 0);
-    const totalNet = results.reduce((s, r) => s + r.net, 0);
-    const profit   = totalNet - totalBet;
-    const dealerBust = this.engine.isBust(this.engine.dealerHand);
+    const isSingle = this.engine.players.length === 1;
 
     let title, detail, type;
-    if (wins > 0 && losses === 0) {
-      title  = dealerBust ? "DEALER BUSTS — YOU WIN!" : "YOU WIN!";
-      detail = `+$${profit}`;
-      type   = "win";
-      this._playSound("bjWin");
-    } else if (losses > 0 && wins === 0 && pushes === 0) {
-      const playerBust = this.engine.isBust(this.engine.playerHands[0]);
-      title  = playerBust ? "BUST — YOU LOSE" : "DEALER WINS";
-      detail = `-$${totalBet}`;
-      type   = "lose";
-      this._playSound("bjLose");
-    } else if (pushes === results.length) {
-      title  = "PUSH";
-      detail = "Bets returned";
-      type   = "push";
+
+    if (isSingle) {
+      // Single-player: same as original
+      if (wins > 0 && loses === 0) {
+        const net = results.find(r => r.result === "win" || r.result === "blackjack");
+        const bjRes = results.find(r => r.result === "blackjack");
+        if (bjRes) {
+          title = "BLACKJACK!"; detail = `+$${Math.floor((bjRes.bet ?? bjRes.net - bjRes.net * 2/5) * 1.5)}`; type = "blackjack";
+          this._playSound("bjBlackjack");
+        } else {
+          title = "YOU WIN!"; detail = `+$${net ? net.net - (net.bet ?? 0) : ""}`; type = "win";
+          this._playSound("bjWin");
+        }
+      } else if (loses > 0 && wins === 0) {
+        title = "YOU LOSE"; detail = "Better luck next hand"; type = "lose";
+        this._playSound("bjLose");
+      } else {
+        title = "PUSH"; detail = "Bet returned"; type = "push";
+      }
     } else {
-      // mixed (split result)
-      title  = "SPLIT RESULT";
-      detail = results.map(r =>
-        r.result === "win"  ? `H${r.handIndex + 1}: +$${r.net - r.bet}`
-        : r.result === "push" ? `H${r.handIndex + 1}: Push`
-        : `H${r.handIndex + 1}: -$${r.bet}`
-      ).join("  ·  ");
-      type   = profit > 0 ? "win" : profit < 0 ? "lose" : "push";
-      if (profit > 0) this._playSound("bjWin");
-      else this._playSound("bjLose");
+      // Multi-player summary
+      if (wins > 0 && loses === 0)   { title = "WINNERS! 🎉"; type = "win";  this._playSound("bjWin"); }
+      else if (loses > 0 && wins === 0) { title = "DEALER WINS"; type = "lose"; this._playSound("bjLose"); }
+      else if (pushes === results.length) { title = "ALL PUSH"; type = "push"; }
+      else                             { title = "ROUND OVER";  type = wins > loses ? "win" : "lose"; }
+      detail = `${wins} Win · ${loses} Lose · ${pushes} Push`;
+    }
+
+    // Build per-player result rows
+    const playerResultsEl = document.getElementById("bjOutcomePlayerResults");
+    if (playerResultsEl) {
+      if (!isSingle) {
+        // Group by player
+        const byPlayer = {};
+        for (const r of results) {
+          if (!byPlayer[r.playerId]) byPlayer[r.playerId] = { name: r.playerName, results: [] };
+          byPlayer[r.playerId].results.push(r);
+        }
+        playerResultsEl.innerHTML = Object.values(byPlayer).map(pr => {
+          const totalNet = pr.results.reduce((s, r) => s + r.net, 0);
+          const totalBet = pr.results.reduce((s, r) => s + (r.bet ?? 0), 0);
+          const profit   = totalNet - totalBet;
+          const tag = pr.results[0]?.result;
+          const typeClass = (tag === "blackjack" || tag === "win") ? "win"
+                          : tag === "push" ? "push" : "lose";
+          const profitStr = profit > 0 ? `+$${profit}` : profit < 0 ? `-$${Math.abs(profit)}` : "push";
+          return `<div class="bj-outcome-player-row bj-outcome-player-row--${typeClass}">
+            <span class="bj-outcome-player-name">${this._esc(pr.name)}</span>
+            <span class="bj-outcome-player-net">${profitStr}</span>
+          </div>`;
+        }).join("");
+        playerResultsEl.classList.remove("bj-hidden");
+      } else {
+        playerResultsEl.innerHTML = "";
+        playerResultsEl.classList.add("bj-hidden");
+      }
     }
 
     this._showOutcome(title, detail, type, earned, bonus);
-    if (type === "win") this._launchConfetti();
+    if (type === "win" || type === "blackjack") this._launchConfetti();
   }
 
   _showOutcome(title, detail, type, earned = [], bonus = 0) {
     const el = this.elements;
+    if (el.bjOutcomeTitle)  el.bjOutcomeTitle.textContent  = title;
+    if (el.bjOutcomeDetail) el.bjOutcomeDetail.textContent = detail;
 
-    el.bjOutcomeTitle.textContent  = title;
-    el.bjOutcomeDetail.textContent = detail;
-
-    // Streak badge
-    const streak = this.engine.stats.currentStreak;
+    const streak = Math.max(0, ...this.engine.players.map(p => p.stats.currentStreak));
     if (el.bjOutcomeStreak) {
       el.bjOutcomeStreak.textContent = streak >= 2 ? `🔥 ${streak} in a row!` : "";
       el.bjOutcomeStreak.className   = `bj-outcome-streak${streak >= 3 ? " bj-outcome-streak--hot" : ""}`;
     }
 
-    // Challenge bonus line
     if (el.bjOutcomeBonus) {
       if (earned.length > 0) {
         el.bjOutcomeBonus.innerHTML = earned.map(e =>
@@ -710,41 +1203,24 @@ export class BlackjackUI {
       }
     }
 
-    el.bjOutcomeOverlay.className = `bj-outcome-overlay bj-outcome--${type}`;
-    // Remove hidden before animation tick
-    el.bjOutcomeOverlay.removeAttribute("hidden");
-    el.bjOutcomeOverlay.classList.remove("bj-hidden");
-    void el.bjOutcomeOverlay.offsetWidth; // force reflow
-    el.bjOutcomeOverlay.classList.add("bj-outcome--visible");
+    if (el.bjOutcomeOverlay) {
+      el.bjOutcomeOverlay.className = `bj-outcome-overlay bj-outcome--${type}`;
+      el.bjOutcomeOverlay.removeAttribute("hidden");
+      el.bjOutcomeOverlay.classList.remove("bj-hidden");
+      void el.bjOutcomeOverlay.offsetWidth;
+      el.bjOutcomeOverlay.classList.add("bj-outcome--visible");
+    }
+
+    // Update "Next Round" button text
+    const nrBtn = document.getElementById("bjNextRoundBtn");
+    if (nrBtn) nrBtn.textContent = "Next Round ›";
   }
 
   _hideOutcome() {
     const ov = this.elements.bjOutcomeOverlay;
+    if (!ov) return;
     ov.classList.remove("bj-outcome--visible");
     setTimeout(() => ov.classList.add("bj-hidden"), 350);
-  }
-
-  _showBankrupt() {
-    this.elements.bjOutcomeTitle.textContent  = "BANKRUPT";
-    this.elements.bjOutcomeDetail.textContent = "Your balance hit zero. Starting fresh with $1,000.";
-    if (this.elements.bjOutcomeBonus) {
-      this.elements.bjOutcomeBonus.innerHTML = "";
-      this.elements.bjOutcomeBonus.classList.add("bj-hidden");
-    }
-    if (this.elements.bjOutcomeStreak) {
-      this.elements.bjOutcomeStreak.textContent = "";
-    }
-    this.elements.bjNextRoundBtn.textContent = "Start Over";
-    this.elements.bjOutcomeOverlay.className = "bj-outcome-overlay bj-outcome--bankrupt";
-    this.elements.bjOutcomeOverlay.classList.remove("bj-hidden");
-    void this.elements.bjOutcomeOverlay.offsetWidth;
-    this.elements.bjOutcomeOverlay.classList.add("bj-outcome--visible");
-
-    // Reset engine balance and challenges
-    this.engine.balance = 1000;
-    this.engine.stats.currentStreak = 0;
-    this._challenges = getDailyChallenges();
-    this._wentBelowHalf = false;
   }
 
   // ─── Confetti ──────────────────────────────────────────────────────────────
@@ -781,9 +1257,7 @@ export class BlackjackUI {
         ctx.fillStyle = p.color;
         ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
         ctx.restore();
-        p.x += p.vx;
-        p.y += p.vy;
-        p.rot += p.rspd;
+        p.x += p.vx; p.y += p.vy; p.rot += p.rspd;
         if (frame > 80) p.opacity -= 0.011;
       }
       frame++;
@@ -797,10 +1271,7 @@ export class BlackjackUI {
   }
 
   _stopConfetti() {
-    if (this._confettiAnim) {
-      cancelAnimationFrame(this._confettiAnim);
-      this._confettiAnim = null;
-    }
+    if (this._confettiAnim) { cancelAnimationFrame(this._confettiAnim); this._confettiAnim = null; }
     const c = this.elements.bjConfettiCanvas;
     if (c) c.getContext("2d").clearRect(0, 0, c.width, c.height);
   }
@@ -816,9 +1287,14 @@ export class BlackjackUI {
   _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   _shake(el) {
+    if (!el) return;
     el.classList.remove("bj-shake");
     void el.offsetWidth;
     el.classList.add("bj-shake");
     setTimeout(() => el.classList.remove("bj-shake"), 500);
+  }
+
+  _esc(str) {
+    return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 }
