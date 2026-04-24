@@ -454,7 +454,13 @@ body[data-theme="obsidian"] .square.black {
   background: var(--black-square);
 }
 
-/* PBR-inspired chess pieces — layered specular + ground shadow + ambient */
+/* Chess pieces — Unicode glyphs; keep shadows tight so outlines stay sharp */
+.piece {
+  position: relative;
+  z-index: 1;
+  line-height: 1;
+}
+
 .piece.light {
   color: var(--piece-light);
   text-shadow:
@@ -466,14 +472,15 @@ body[data-theme="obsidian"] .square.black {
   filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.52));
 }
 
+/* Dark pieces: avoid filter + large-radius text-shadow — those blur glyph edges badly */
 .piece.dark {
   color: var(--piece-dark);
   text-shadow:
-    0 -1px 1px rgba(110, 75, 30, 0.5),
-    0 1px 0 rgba(0, 0, 0, 1),
-    0 3px 8px rgba(0, 0, 0, 0.9),
-    0 0 6px rgba(0, 0, 0, 0.5);
-  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.75));
+    0 1px 0 rgba(0, 0, 0, 0.55),
+    0 2px 4px rgba(0, 0, 0, 0.4);
+  filter: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .square.selected::before {
