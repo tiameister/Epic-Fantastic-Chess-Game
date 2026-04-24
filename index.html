@@ -32,37 +32,6 @@
         <button id="tabQuestsBtn" type="button" class="tab-btn" data-tab-target="quests">Quests</button>
       </nav>
 
-      <section class="status-panel tab-section" data-tab-section="game">
-        <div class="status-item">
-          <span class="label">Turn</span>
-          <strong id="turnLabel">White</strong>
-        </div>
-        <div class="status-item">
-          <span class="label">Active Side</span>
-          <strong id="activeSideBadge" class="turn-badge white">White to move</strong>
-        </div>
-        <div class="status-item">
-          <span class="label">State</span>
-          <strong id="stateLabel">In Progress</strong>
-        </div>
-        <div class="status-item">
-          <span class="label">Move Quality</span>
-          <strong id="moveQualityLabel">Neutral</strong>
-        </div>
-        <div class="status-item message-wrap">
-          <span class="label">Message</span>
-          <strong id="messageLabel">Select a piece to begin.</strong>
-        </div>
-        <div class="status-item">
-          <span class="label">White Time</span>
-          <strong id="whiteTimeLabel">10:00</strong>
-        </div>
-        <div class="status-item">
-          <span class="label">Black Time</span>
-          <strong id="blackTimeLabel">10:00</strong>
-        </div>
-      </section>
-
       <section class="profile-panel tab-section" data-tab-section="profile">
         <div class="profile-item">
           <span class="label">Level</span>
@@ -129,6 +98,37 @@
         <button id="resignBtn" type="button" aria-label="Resign current game">Resign</button>
         <button id="rematchBtn" type="button" aria-label="Start rematch">Rematch</button>
       </footer>
+
+      <section class="status-panel tab-section" data-tab-section="game">
+        <div class="status-item">
+          <span class="label">Turn</span>
+          <strong id="turnLabel">White</strong>
+        </div>
+        <div class="status-item">
+          <span class="label">Active Side</span>
+          <strong id="activeSideBadge" class="turn-badge white">White to move</strong>
+        </div>
+        <div class="status-item">
+          <span class="label">State</span>
+          <strong id="stateLabel">In Progress</strong>
+        </div>
+        <div class="status-item">
+          <span class="label">Move Quality</span>
+          <strong id="moveQualityLabel">Neutral</strong>
+        </div>
+        <div class="status-item message-wrap">
+          <span class="label">Message</span>
+          <strong id="messageLabel">Select a piece to begin.</strong>
+        </div>
+        <div class="status-item">
+          <span class="label">White Time</span>
+          <strong id="whiteTimeLabel">10:00</strong>
+        </div>
+        <div class="status-item">
+          <span class="label">Black Time</span>
+          <strong id="blackTimeLabel">10:00</strong>
+        </div>
+      </section>
 
       <details class="advanced-controls">
         <summary>Game Settings</summary>
@@ -247,23 +247,26 @@
         <h1>Royal Backgammon</h1>
         <p>Traditional Turkish Tavla mode</p>
       </header>
-      <section class="actions">
-        <label for="backgammonLangToggle">
-          Language
-          <select id="backgammonLangToggle">
-            <option value="en" selected>English</option>
-            <option value="tr">Turkce</option>
-          </select>
-        </label>
-        <label class="switch-row" for="backgammonDoublingToggle">
-          Doubling Cube (Optional)
-          <input id="backgammonDoublingToggle" type="checkbox">
-        </label>
-        <label class="switch-row" for="backgammonCheatWhiteToggle">
-          Cheat Mode (White loaded dice)
-          <input id="backgammonCheatWhiteToggle" type="checkbox">
-        </label>
-      </section>
+      <details class="advanced-controls backgammon-settings">
+        <summary>Tavla Settings</summary>
+        <section class="actions settings-grid">
+          <label for="backgammonLangToggle">
+            Language
+            <select id="backgammonLangToggle">
+              <option value="en" selected>English</option>
+              <option value="tr">Turkce</option>
+            </select>
+          </label>
+          <label class="switch-row" for="backgammonDoublingToggle">
+            Doubling Cube (Optional)
+            <input id="backgammonDoublingToggle" type="checkbox">
+          </label>
+          <label class="switch-row" for="backgammonCheatWhiteToggle">
+            Cheat Mode (White loaded dice)
+            <input id="backgammonCheatWhiteToggle" type="checkbox">
+          </label>
+        </section>
+      </details>
       <section class="actions">
         <button id="backgammonRollBtn" type="button">Roll Dice</button>
         <button id="backgammonUndoBtn" type="button">Undo</button>
@@ -274,11 +277,11 @@
         <button id="backToChooserBtn" type="button">Back to Menu</button>
       </section>
       <section class="backgammon-hud">
-        <p id="backgammonStatus" class="label">white to move.</p>
-        <p id="backgammonScore" class="label"></p>
-        <p id="backgammonCube" class="label"></p>
-        <p id="backgammonBar" class="label"></p>
-        <p id="backgammonOff" class="label"></p>
+        <p id="backgammonStatus" class="label brass-plate">white to move.</p>
+        <p id="backgammonScore" class="label brass-plate"></p>
+        <p id="backgammonCube" class="label brass-plate"></p>
+        <p id="backgammonBar" class="label brass-plate"></p>
+        <p id="backgammonOff" class="label brass-plate"></p>
         <p id="backgammonCallout" class="label"></p>
       </section>
       <section id="backgammonDice" class="backgammon-dice" title="Click dice area to roll"></section>
@@ -286,9 +289,10 @@
       <section id="backgammonBoard" class="backgammon-board"></section>
       <ul id="backgammonHints" class="meta-list hidden"></ul>
       <section id="backgammonGameOverModal" class="promotion-modal hidden" aria-live="polite">
-        <div class="promotion-card">
+        <div class="promotion-card backgammon-victory-card">
           <h3 id="backgammonGameOverTitle">Game Over</h3>
           <p id="backgammonGameOverText">Winner</p>
+          <p id="backgammonGameOverFlavor" class="label"></p>
           <button id="backgammonNewRoundBtn" type="button">Start Next Round</button>
         </div>
       </section>

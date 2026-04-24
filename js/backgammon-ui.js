@@ -411,6 +411,7 @@ export class BackgammonUI {
     this.updateDoubleButtons();
     this.updateCallout();
     this.updateActionStates();
+    this.updateBoardTurnCue();
   }
 
   renderDice() {
@@ -580,12 +581,34 @@ export class BackgammonUI {
     const t = this.translate();
     this.elements.backgammonGameOverTitle.textContent = this.language === "tr" ? "Oyun Bitti" : "Game Over";
     this.elements.backgammonGameOverText.textContent = `${this.colorName(this.engine.winner)} ${t.winsGame} (+${this.engine.lastWinPoints})`;
+    const flavor = this.getVictoryFlavor();
+    if (this.elements.backgammonGameOverFlavor) {
+      this.elements.backgammonGameOverFlavor.textContent = flavor;
+    }
     this.elements.backgammonGameOverModal.classList.remove("hidden");
   }
 
   hideGameOverModal() {
     if (!this.elements.backgammonGameOverModal) return;
     this.elements.backgammonGameOverModal.classList.add("hidden");
+  }
+
+  updateBoardTurnCue() {
+    this.elements.backgammonBoard.classList.toggle("turn-white", this.engine.turn === "white");
+    this.elements.backgammonBoard.classList.toggle("turn-black", this.engine.turn === "black");
+  }
+
+  getVictoryFlavor() {
+    if (this.engine.lastWinType === "backgammon") {
+      return this.language === "tr" ? "Backgammon! Usta zaferi." : "Backgammon! Dominant finish.";
+    }
+    if (this.engine.lastWinType === "gammon") {
+      return this.language === "tr" ? "Mars! Bonus puan kazandın." : "Mars/Gammon! Bonus points awarded.";
+    }
+    if (this.engine.dice.length === 2 && this.engine.dice[0] === 6 && this.engine.dice[1] === 6) {
+      return this.language === "tr" ? "Düşeş ile bitiriş!" : "Finished on Düşeş!";
+    }
+    return this.language === "tr" ? "Yeni tur için hazırsın." : "Ready for the next round.";
   }
 
   playTone(freq, duration, type = "sine", delay = 0) {

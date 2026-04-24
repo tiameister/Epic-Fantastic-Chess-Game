@@ -37,6 +37,7 @@ const elements = {
   backgammonGameOverModal: document.getElementById("backgammonGameOverModal"),
   backgammonGameOverTitle: document.getElementById("backgammonGameOverTitle"),
   backgammonGameOverText: document.getElementById("backgammonGameOverText"),
+  backgammonGameOverFlavor: document.getElementById("backgammonGameOverFlavor"),
   backgammonNewRoundBtn: document.getElementById("backgammonNewRoundBtn"),
   board: document.getElementById("board"),
   turnLabel: document.getElementById("turnLabel"),
