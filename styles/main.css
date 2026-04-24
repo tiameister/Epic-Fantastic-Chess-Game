@@ -88,6 +88,14 @@ body {
   padding: 24px;
 }
 
+.app-owner-mark {
+  margin: 10px 0 0;
+  text-align: center;
+  color: rgba(148, 163, 184, 0.9);
+  font-size: 0.78rem;
+  letter-spacing: 0.2px;
+}
+
 .game-chooser {
   position: fixed;
   inset: 0;

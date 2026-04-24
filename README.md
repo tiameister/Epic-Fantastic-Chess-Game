@@ -2,6 +2,10 @@
 
 A browser board-games project built with plain HTML, CSS, and JavaScript.
 
+## Owner
+
+Taha Ilter Akar
+
 ## Student Project Note
 
 This is a humble student project made for learning and experimentation.  
@@ -92,7 +96,12 @@ Then reference them here with markdown images once captured.
 
 ## Credits
 
-Designed and developed as a student learning project.
+Designed and developed as a student learning project by Taha Ilter Akar.
+
+## License
+
+This project is licensed under the MIT License.  
+Copyright (c) 2026 Taha Ilter Akar.
 
 ## Project Docs
 
