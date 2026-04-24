@@ -89,11 +89,13 @@ body {
 }
 
 .app-owner-mark {
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   text-align: center;
-  color: rgba(148, 163, 184, 0.9);
-  font-size: 0.78rem;
-  letter-spacing: 0.2px;
+  color: #f8fafc;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.35px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
 }
 
 .game-chooser {
@@ -1689,6 +1691,236 @@ body.layout-training .training-panel {
 }
 
 .die-pip.invisible { visibility: hidden; }
+
+/* ── Chess Legal-Move Ghost Piece ────────────────────────── */
+.ghost-piece {
+  opacity: 0.32;
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  animation: ghost-breathe 1.8s ease-in-out infinite;
+}
+
+@keyframes ghost-breathe {
+  0%, 100% { opacity: 0.28; transform: scale(0.88); }
+  50%       { opacity: 0.44; transform: scale(0.96); }
+}
+
+/* ── Backgammon: Board Scaling & HUD Integration ─────────── */
+#backgammonCard {
+  padding: 10px 12px;
+}
+
+/* Hide legacy top HUD — info lives inside the board now */
+.backgammon-hud {
+  display: none !important;
+}
+
+/* Hide the Roll button — dice area IS the roll trigger */
+#backgammonRollBtn {
+  display: none !important;
+}
+
+/* Scale the board to dominate the viewport */
+.backgammon-board {
+  grid-template-columns: 1fr 78px 1fr 72px;
+  min-height: 74vh;
+  gap: 6px;
+  padding: 10px;
+  align-items: stretch;
+  position: relative;
+  overflow: visible;
+}
+
+/* Make halves fill the full board height and stack rows */
+.bg-half {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 70vh;
+  gap: 0;
+}
+
+/* Each row of 6 points shares the height equally */
+.bg-row {
+  flex: 1;
+  align-content: stretch;
+}
+
+/* Points scale with available height */
+.bg-point {
+  min-height: 0;
+  flex: 1;
+  height: 100%;
+}
+
+/* Scale checkers for larger board */
+.bg-checker {
+  width: clamp(18px, 2.4vw, 26px);
+  height: clamp(18px, 2.4vw, 26px);
+}
+
+/* Bar accommodates dice between the two bar-slot buttons */
+.bg-bar {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px;
+}
+
+.bg-bar-slot {
+  width: 100%;
+  text-align: center;
+  padding: 6px 2px;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+/* Dice sit in the bar between the two slots */
+.bg-bar-dice {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 2px;
+  border-radius: 8px;
+  border: 1px solid rgba(228, 201, 164, 0.25);
+  background: rgba(20, 10, 4, 0.25);
+  transition: background 200ms;
+}
+
+.bg-bar-dice:hover {
+  background: rgba(40, 22, 10, 0.45);
+}
+
+/* Die scenes stack vertically in the bar */
+.bg-bar-dice .die-3d-scene {
+  width: 44px;
+  height: 44px;
+}
+
+.bg-bar-dice .die-3d-cube {
+  width: 44px;
+  height: 44px;
+}
+
+.bg-bar-dice .die-face {
+  width: 44px;
+  height: 44px;
+}
+
+.bg-bar-dice .face-front  { transform: rotateY(0deg)   translateZ(22px); }
+.bg-bar-dice .face-back   { transform: rotateY(180deg) translateZ(22px); }
+.bg-bar-dice .face-right  { transform: rotateY(90deg)  translateZ(22px); }
+.bg-bar-dice .face-left   { transform: rotateY(-90deg) translateZ(22px); }
+.bg-bar-dice .face-top    { transform: rotateX(90deg)  translateZ(22px); }
+.bg-bar-dice .face-bottom { transform: rotateX(-90deg) translateZ(22px); }
+
+/* Roll hint label */
+.bg-roll-hint {
+  font-size: 0.58rem;
+  color: rgba(236, 209, 175, 0.55);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Off slots — slimmer since dice moved to bar */
+.bg-off {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 4px;
+  justify-content: space-between;
+}
+
+.bg-off-slot {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Board HUD overlay ────────────────────────────────────── */
+.bg-board-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.bg-hud-chip {
+  position: absolute;
+  background: rgba(8, 4, 2, 0.72);
+  border: 1px solid rgba(224, 184, 135, 0.28);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #f0e0c4;
+  white-space: nowrap;
+  line-height: 1.4;
+  backdrop-filter: blur(4px);
+}
+
+.bg-hud-top-left  { top: 8px;    left:  8px;  }
+.bg-hud-top-right { top: 8px;    right: 8px;  }
+.bg-hud-bot-left  { bottom: 8px; left:  8px;  }
+.bg-hud-bot-right { bottom: 8px; right: 8px;  }
+
+.bg-hud-chip.winner {
+  border-color: rgba(251, 191, 36, 0.55);
+  color: #fde68a;
+}
+
+/* ── Checker can-move glow ───────────────────────────────── */
+.bg-checker.can-move {
+  box-shadow:
+    0 0 0 2px rgba(96, 165, 250, 0.55),
+    0 0 10px rgba(96, 165, 250, 0.4),
+    0 2px 4px rgba(0, 0, 0, 0.35);
+  animation: checker-glow 1.8s ease-in-out infinite;
+}
+
+@keyframes checker-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.4), 0 0 8px rgba(96, 165, 250, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.8), 0 0 16px rgba(96, 165, 250, 0.65);
+  }
+}
+
+/* ── Checker shake (illegal one-click) ───────────────────── */
+.bg-checker.shake {
+  animation: checker-shake 300ms ease !important;
+}
+
+@keyframes checker-shake {
+  0%   { transform: translateX(0);    }
+  18%  { transform: translateX(-5px); }
+  36%  { transform: translateX(5px);  }
+  54%  { transform: translateX(-4px); }
+  72%  { transform: translateX(3px);  }
+  100% { transform: translateX(0);    }
+}
+
+/* ── Checker snap-to-finish (one-click move animation) ───── */
+.bg-checker.one-click-moved {
+  animation: checker-snap 220ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+@keyframes checker-snap {
+  0%   { transform: translateY(-18px) scale(1.12); opacity: 0.7; }
+  60%  { transform: translateY(2px)   scale(1.03); opacity: 1;   }
+  100% { transform: translateY(0)     scale(1);    opacity: 1;   }
+}
 
 /* ── Enhanced Backgammon Victory Card ────────────────────── */
 .bg-victory-card {

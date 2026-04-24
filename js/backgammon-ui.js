@@ -17,9 +17,11 @@ export class BackgammonUI {
     this.offSlotWhite = null;
     this.offSlotBlack = null;
 
-    // 3-D dice
-    this.diceAnimator = new DiceAnimator(elements.backgammonDice);
-    this._diceCount   = 0;
+    // 3-D dice — the animator is re-targeted to the bar container on each board render
+    this.diceAnimator    = new DiceAnimator(elements.backgammonDice);
+    this._diceCount      = 0;
+    this._barDiceEl      = null;   // div inside the bar that holds the 3D dice
+    this._pendingSnapTarget = null; // point index where the last one-click move landed
   }
 
   init() {
@@ -108,33 +110,99 @@ export class BackgammonUI {
     if (!this.active || this.engine.winner) return;
     if (this.engine.doubleOfferedBy) return;
     if (this.engine.movesLeft.length === 0) return;
-    if (this.selectedFrom === null) {
-      if (!this.hasSelectableChecker(from)) return;
-      this.selectedFrom = from;
-      this.playCheckerSfx();
-      this.render();
-      return;
-    }
-    const result = this.engine.move(this.selectedFrom, from);
-    if (!result.ok) {
+
+    // If a different piece is already selected, try a manual move first
+    // (preserves the two-click flow as a deliberate override)
+    if (this.selectedFrom !== null && this.selectedFrom !== from) {
+      const result = this.engine.move(this.selectedFrom, from);
+      if (result.ok) {
+        this._onMoveExecuted(this.selectedFrom, from, true);
+        this.selectedFrom = null;
+        return;
+      }
+      // Magnetic snap fallback
       const snapped = this.getMagneticDestination(this.selectedFrom, from);
       if (snapped !== null) {
         const snapResult = this.engine.move(this.selectedFrom, snapped);
         if (snapResult.ok) {
+          this._onMoveExecuted(this.selectedFrom, snapped, true);
           this.selectedFrom = null;
-          this.playCheckerSfx();
-          this.render();
           return;
         }
       }
+      // If the click was on another selectable checker, switch selection
       if (this.hasSelectableChecker(from)) {
         this.selectedFrom = from;
+        this.render();
+        return;
       }
-    } else {
       this.selectedFrom = null;
-      this.playCheckerSfx();
+      this.render();
+      return;
+    }
+
+    // Deselect on re-click
+    if (this.selectedFrom === from) {
+      this.selectedFrom = null;
+      this.render();
+      return;
+    }
+
+    // ── ONE-CLICK QUICK MOVE ─────────────────────────────────
+    if (!this.hasSelectableChecker(from)) return;
+
+    const legal = this.engine.getLegalMoves().filter((m) => m.from === from);
+    if (legal.length === 0) {
+      this._shakePoint(from);
+      return;
+    }
+
+    // Pick the move that uses the first die in the queue;
+    // fall back to the next available die if that one doesn't reach this checker.
+    const move = this._pickFirstDieMove(legal);
+    if (!move) {
+      this._shakePoint(from);
+      return;
+    }
+
+    const result = this.engine.move(from, move.to);
+    if (result.ok) {
+      this._onMoveExecuted(from, move.to, true);
+      this.selectedFrom = null;
+    } else {
+      // Should not happen — legal was filtered, but guard just in case
+      this._shakePoint(from);
+      this.render();
+    }
+  }
+
+  /** Pick the move that uses movesLeft[0]; fall back to any legal move. */
+  _pickFirstDieMove(legal) {
+    if (!this.engine.movesLeft.length) return null;
+    const firstDie = this.engine.movesLeft[0];
+    return legal.find((m) => m.die === firstDie) ?? legal[0] ?? null;
+  }
+
+  /** Called after a successful engine.move() — plays SFX, animates, re-renders. */
+  _onMoveExecuted(from, to, isOneClick = false) {
+    this.playCheckerSfx();
+    if (isOneClick) {
+      // Queue the snap animation class on the landing checker after render
+      this._pendingSnapTarget = to;
     }
     this.render();
+  }
+
+  /** Shake all checkers on the given point to signal an invalid move. */
+  _shakePoint(from) {
+    const pointEl = this.pointElements.get(from);
+    if (!pointEl) return;
+    pointEl.querySelectorAll(".bg-checker").forEach((c) => {
+      c.classList.remove("shake");
+      void c.offsetWidth;
+      c.classList.add("shake");
+      c.addEventListener("animationend", () => c.classList.remove("shake"), { once: true });
+    });
   }
 
   startDragChecker(event, fromPoint) {
@@ -270,6 +338,7 @@ export class BackgammonUI {
     label.className = "bg-point-label";
     label.textContent = this.getPointLabel(index);
     point.appendChild(label);
+    const hasLegal = legal.some((m) => m.from === index);
     const stack = document.createElement("div");
     stack.className = "bg-stack";
     const visibleCount = Math.min(abs, 5);
@@ -278,8 +347,21 @@ export class BackgammonUI {
       checker.className = `bg-checker ${owner}`;
       checker.style.transform = `translateY(${isTop ? -i * 6 : i * 6}px)`;
       if (this.selectedFrom === index) checker.classList.add("lifted");
-      if (this.engine.lastMove && this.engine.lastMove.to === index && i === 0) {
+      const isLastMoveLanding = this.engine.lastMove && this.engine.lastMove.to === index && i === 0;
+      if (isLastMoveLanding) {
         checker.classList.add("moved");
+      }
+      // One-click snap animation on the topmost checker of the landing point
+      if (this._pendingSnapTarget === index && i === 0) {
+        checker.classList.add("one-click-moved");
+        checker.addEventListener("animationend", () => {
+          checker.classList.remove("one-click-moved");
+          this._pendingSnapTarget = null;
+        }, { once: true });
+      }
+      // Glow: checkers that belong to the current player and have legal moves
+      if (hasLegal && owner === this.engine.turn && this.engine.dice.length > 0) {
+        checker.classList.add("can-move");
       }
       checker.dataset.fromPoint = String(index);
       checker.addEventListener("pointerdown", (event) => this.startDragChecker(event, index));
@@ -298,21 +380,57 @@ export class BackgammonUI {
   buildBarArea() {
     const bar = document.createElement("div");
     bar.className = "bg-bar";
-    const whiteBtn = document.createElement("button");
-    whiteBtn.type = "button";
-    whiteBtn.className = "bg-bar-slot white";
-    whiteBtn.textContent = `W ${this.engine.bar.white}`;
-    whiteBtn.addEventListener("click", () => this.handlePointClick("bar"));
+
     const blackBtn = document.createElement("button");
     blackBtn.type = "button";
     blackBtn.className = "bg-bar-slot black";
     blackBtn.textContent = `B ${this.engine.bar.black}`;
     blackBtn.addEventListener("click", () => this.handlePointClick("bar"));
-    if (this.selectedFrom === "bar") {
-      whiteBtn.classList.add("selected");
-      blackBtn.classList.add("selected");
+    if (this.selectedFrom === "bar") blackBtn.classList.add("selected");
+
+    // ── Dice area (click to roll) ──────────────────────────────
+    const diceContainer = document.createElement("div");
+    diceContainer.className = "bg-bar-dice";
+    diceContainer.title = this.engine.movesLeft.length > 0
+      ? "Dice rolled"
+      : "Click to roll dice";
+    diceContainer.addEventListener("click", () => {
+      if (this.engine.movesLeft.length === 0 && !this.engine.winner && !this.engine.doubleOfferedBy) {
+        this.rollDiceFromUI();
+      }
+    });
+
+    // Re-target the DiceAnimator to this new container each board rebuild
+    this._barDiceEl = diceContainer;
+    // Rebuild dice inside the new container with current count
+    const count = this.engine.dice.length || 2;
+    this.diceAnimator._container = diceContainer;
+    if (this._diceCount !== count) {
+      this.diceAnimator.build(count);
+      this._diceCount = count;
+    } else {
+      // Re-inject the existing scene elements (they were detached by innerHTML="")
+      this.diceAnimator._dice.forEach((d) => diceContainer.appendChild(d._scene));
     }
+    this._syncDiceDisplay();
+
+    // Roll hint label
+    if (this.engine.movesLeft.length === 0 && !this.engine.winner) {
+      const hint = document.createElement("div");
+      hint.className = "bg-roll-hint";
+      hint.textContent = "tap to roll";
+      diceContainer.appendChild(hint);
+    }
+
+    const whiteBtn = document.createElement("button");
+    whiteBtn.type = "button";
+    whiteBtn.className = "bg-bar-slot white";
+    whiteBtn.textContent = `W ${this.engine.bar.white}`;
+    whiteBtn.addEventListener("click", () => this.handlePointClick("bar"));
+    if (this.selectedFrom === "bar") whiteBtn.classList.add("selected");
+
     bar.appendChild(blackBtn);
+    bar.appendChild(diceContainer);
     bar.appendChild(whiteBtn);
     return bar;
   }
@@ -320,15 +438,19 @@ export class BackgammonUI {
   buildOffArea() {
     const off = document.createElement("div");
     off.className = "bg-off";
+
     const whiteSlot = document.createElement("div");
     whiteSlot.className = "bg-off-slot white";
     whiteSlot.addEventListener("click", () => this.handlePointClick("off"));
+
     const blackSlot = document.createElement("div");
     blackSlot.className = "bg-off-slot black";
     blackSlot.addEventListener("click", () => this.handlePointClick("off"));
+
     // Cache for efficient drag-hover updates.
     this.offSlotWhite = whiteSlot;
     this.offSlotBlack = blackSlot;
+
     const legal = this.engine.getLegalMoves();
     const canOff = this.selectedFrom !== null && legal.some((m) => m.from === this.selectedFrom && m.to === "off");
     const bearingState = this.engine.canBearOff(this.engine.turn);
@@ -344,8 +466,34 @@ export class BackgammonUI {
     blackSlot.appendChild(this.buildOffStack("black", this.engine.off.black));
     off.appendChild(whiteSlot);
     off.appendChild(blackSlot);
-    off.appendChild(this.elements.backgammonDice);
+    // Dice have moved to the bar — off area has only the bearing-off slots.
     return off;
+  }
+
+  /** Sync the dice visual state (show values, mark used) without animation. */
+  _syncDiceDisplay() {
+    const values = this.engine.dice.length > 0 ? this.engine.dice : [1, 1];
+    this.diceAnimator.showRolled(values);
+    if (!this.engine.dice.length) {
+      this.diceAnimator.markUsed([0, 1]);
+    } else {
+      this.diceAnimator.markUsed(this._getUsedDiceIndices());
+    }
+  }
+
+  /** Determine which visual dice indices have been consumed from movesLeft. */
+  _getUsedDiceIndices() {
+    const remaining = [...this.engine.movesLeft];
+    const used = [];
+    this.engine.dice.forEach((v, i) => {
+      const idx = remaining.indexOf(v);
+      if (idx !== -1) {
+        remaining.splice(idx, 1); // still available
+      } else {
+        used.push(i); // consumed
+      }
+    });
+    return used;
   }
 
   buildOffStack(color, count) {
@@ -380,30 +528,86 @@ export class BackgammonUI {
     this.pointElements.clear();
     this.offSlotWhite = null;
     this.offSlotBlack = null;
+
     const left = document.createElement("div");
     left.className = "bg-half";
     const right = document.createElement("div");
     right.className = "bg-half";
+
     const topLeft = document.createElement("div");
     topLeft.className = "bg-row";
     [13, 14, 15, 16, 17, 18].forEach((i) => topLeft.appendChild(this.buildPoint(i, true)));
+
     const topRight = document.createElement("div");
     topRight.className = "bg-row";
     [19, 20, 21, 22, 23, 24].forEach((i) => topRight.appendChild(this.buildPoint(i, true)));
+
     const bottomLeft = document.createElement("div");
     bottomLeft.className = "bg-row";
     [12, 11, 10, 9, 8, 7].forEach((i) => bottomLeft.appendChild(this.buildPoint(i, false)));
+
     const bottomRight = document.createElement("div");
     bottomRight.className = "bg-row";
     [6, 5, 4, 3, 2, 1].forEach((i) => bottomRight.appendChild(this.buildPoint(i, false)));
+
     left.appendChild(topLeft);
     left.appendChild(bottomLeft);
     right.appendChild(topRight);
     right.appendChild(bottomRight);
+
     board.appendChild(left);
-    board.appendChild(this.buildBarArea());
+    board.appendChild(this.buildBarArea()); // dice live here now
     board.appendChild(right);
     board.appendChild(this.buildOffArea());
+
+    // Floating HUD overlay — turn, score, bar counts
+    board.appendChild(this._buildBoardHUD());
+  }
+
+  _buildBoardHUD() {
+    const t = this.translate();
+    const hud = document.createElement("div");
+    hud.className = "bg-board-hud";
+    hud.setAttribute("aria-hidden", "true");
+
+    const { white: ws, black: bs } = this.engine.matchScore;
+    const target = this.engine.targetScore;
+
+    if (this.engine.winner) {
+      const chip = document.createElement("div");
+      chip.className = "bg-hud-chip bg-hud-top-left winner";
+      chip.textContent = `🏆 ${this.colorName(this.engine.winner)} wins!`;
+      hud.appendChild(chip);
+    } else {
+      const turnChip = document.createElement("div");
+      turnChip.className = "bg-hud-chip bg-hud-top-left";
+      const turnText = this.engine.dice.length > 0
+        ? `${this.colorName(this.engine.turn)} moving`
+        : `${this.colorName(this.engine.turn)} to roll`;
+      turnChip.textContent = turnText;
+      if (this.engine.whiteCheatMode) turnChip.textContent += " ⚠";
+      hud.appendChild(turnChip);
+    }
+
+    const scoreChip = document.createElement("div");
+    scoreChip.className = "bg-hud-chip bg-hud-top-right";
+    scoreChip.textContent = `W ${ws} — B ${bs}  (first to ${target})`;
+    hud.appendChild(scoreChip);
+
+    const barChip = document.createElement("div");
+    barChip.className = "bg-hud-chip bg-hud-bot-left";
+    const bw = this.engine.bar.white, bb = this.engine.bar.black;
+    barChip.textContent = `Bar: W ${bw} · B ${bb}`;
+    hud.appendChild(barChip);
+
+    if (this.engine.doublingEnabled) {
+      const cubeChip = document.createElement("div");
+      cubeChip.className = "bg-hud-chip bg-hud-bot-right";
+      cubeChip.textContent = `×${this.engine.cubeValue} ${this.engine.cubeOwner ?? t.center}`;
+      hud.appendChild(cubeChip);
+    }
+
+    return hud;
   }
 
   renderStatus() {
@@ -453,8 +657,11 @@ export class BackgammonUI {
   }
 
   render() {
+    // renderBoard() now builds the bar (dice) and HUD overlay in one pass.
     this.renderBoard();
+    // renderDice() syncs markUsed state on the bar dice.
     this.renderDice();
+    // Status / meta still update the hidden HUD elements for accessibility.
     this.renderStatus();
     this.renderMeta();
     this.renderLegalHints();
@@ -465,18 +672,11 @@ export class BackgammonUI {
   }
 
   renderDice() {
-    const values = this.engine.dice.length > 0 ? this.engine.dice : [1, 1];
-    const count  = values.length;
-    if (this._diceCount !== count) {
-      this.diceAnimator.build(count);
-      this._diceCount = count;
-    }
-    this.diceAnimator.showRolled(values);
-    // Dim dice when no roll has happened yet
-    if (!this.engine.dice.length) {
-      this.diceAnimator.markUsed([0, 1]);
-    } else {
-      this.diceAnimator.markUsed([]);
+    // Dice now live inside the bar (built by renderBoard → buildBarArea).
+    // _syncDiceDisplay() is called from buildBarArea, so this method just
+    // keeps the markUsed state fresh after moves.
+    if (this._barDiceEl) {
+      this._syncDiceDisplay();
     }
   }
 
@@ -487,12 +687,9 @@ export class BackgammonUI {
     this.playDiceSfx();
 
     const values = this.engine.dice;
-    if (this._diceCount !== values.length) {
-      this.diceAnimator.build(values.length);
-      this._diceCount = values.length;
-    }
 
-    // Update every part of the UI immediately EXCEPT the dice (handled by animator)
+    // renderBoard() rebuilds the bar with a fresh dice container and re-targets
+    // the DiceAnimator — it must run BEFORE the roll animation.
     this.renderBoard();
     this.renderStatus();
     this.renderMeta();
@@ -500,8 +697,14 @@ export class BackgammonUI {
     this.updateActionStates();
     this.updateBoardTurnCue();
 
-    // Tumble and land — then reveal hints and callout
+    // Animate dice inside the bar (DiceAnimator was re-targeted in renderBoard)
+    if (this._diceCount !== values.length) {
+      this.diceAnimator.build(values.length);
+      this._diceCount = values.length;
+    }
     await this.diceAnimator.roll(values);
+
+    // After tumble settles: reveal legal hints and callout
     this.renderLegalHints();
     this.updateCallout();
   }

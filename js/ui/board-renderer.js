@@ -109,6 +109,19 @@ export class ChessBoardRenderer {
       square.appendChild(pieceNode);
     }
 
+    // Predictive ghost: show semi-transparent copy of the moving piece on
+    // each legal non-capture destination so the player can "see" the move.
+    if (candidate && !candidate.isCapture && selected && !piece) {
+      const movingPiece = engine.getPiece(selected.row, selected.col, engine.board);
+      if (movingPiece) {
+        const ghost = document.createElement("span");
+        ghost.className = `piece ${movingPiece.color === COLOR.WHITE ? "light" : "dark"} ghost-piece`;
+        ghost.setAttribute("aria-hidden", "true");
+        ghost.textContent = PIECE_ICONS[movingPiece.color][movingPiece.type];
+        square.appendChild(ghost);
+      }
+    }
+
     const isBottomRank = orientation === COLOR.WHITE ? row === 7 : row === 0;
     const isLeftFile  = orientation === COLOR.WHITE ? col === 0 : col === 7;
 
