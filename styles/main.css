@@ -2765,6 +2765,10 @@ body.layout-training .training-panel {
   position: relative;
 }
 
+#blackjackCard.hidden {
+  display: none !important;
+}
+
 /* ── Table ───────────────────────────────────────────────────────────────── */
 .bj-table {
   position: relative;

@@ -241,8 +241,31 @@ export class BackgammonEngine {
 
   move(from, to) {
     const legal = this.getLegalMoves();
-    const chosen = legal.find((m) => m.from === from && m.to === to);
-    if (!chosen) return { ok: false, reason: "Illegal move." };
+    const candidates = legal.filter((m) => m.from === from && m.to === to);
+    if (candidates.length === 0) return { ok: false, reason: "Illegal move." };
+
+    // Ambiguous destination (same from->to with different die slot):
+    // choose the branch that keeps the most legal continuation options.
+    let chosen = candidates[0];
+    if (candidates.length > 1) {
+      const before = cloneState(this);
+      let bestFutureDepth = -1;
+      for (const candidate of candidates) {
+        const nextState = this.applyMoveToState(before, candidate, this.turn);
+        const nextDice = this.movesLeft.filter((_, i) => i !== candidate.idx);
+        const futureDepth = this.maxMovableCount(nextState, nextDice, this.turn);
+        if (futureDepth > bestFutureDepth) {
+          bestFutureDepth = futureDepth;
+          chosen = candidate;
+          continue;
+        }
+        if (futureDepth === bestFutureDepth && candidate.die < chosen.die) {
+          // Tie-break: keep the higher die for later flexibility.
+          chosen = candidate;
+        }
+      }
+    }
+
     this.pushHistory();
     const before = cloneState(this);
     const after = this.applyMoveToState(before, chosen, this.turn);

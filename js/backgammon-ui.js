@@ -11,8 +11,6 @@ export class BackgammonUI {
     this.language = "en";
     this.lastWinAnnounced = "";
     this.lastToastTimeout = null;
-    this.dragState = null;
-    this.hoverDropPoint = null;
     // Cached DOM references populated by renderBoard() for O(1) drag-hover updates.
     this.pointElements = new Map();
     this.offSlotWhite = null;
@@ -100,8 +98,6 @@ export class BackgammonUI {
       this.language = this.elements.backgammonLangToggle.value;
       this.render();
     });
-    document.addEventListener("pointermove", (event) => this.handleDragMove(event));
-    document.addEventListener("pointerup", (event) => this.handleDragEnd(event));
     this.engine.setDoublingEnabled(false);
     this.engine.setWhiteCheatMode(false);
     this.render();
@@ -251,95 +247,6 @@ export class BackgammonUI {
     });
   }
 
-  startDragChecker(event, fromPoint) {
-    if (!this.active || this.engine.winner || this.engine.doubleOfferedBy) return;
-    if (this.engine.movesLeft.length === 0) return;
-    if (this._isExecuting) return;
-    if (!this.hasSelectableChecker(fromPoint)) return;
-    event.preventDefault();
-
-    // Drag exposes single-die destinations; combined moves require two clicks.
-    const legal = this.engine.getLegalMoves().filter(m => m.from === fromPoint);
-    if (legal.length === 0) return;
-
-    // Clear any pending click-selection so drag takes over cleanly.
-    this._destinations  = null;
-    this.selectedFrom   = fromPoint;
-    this.dragState      = {
-      from: fromPoint,
-      pointerId: event.pointerId,
-      legalTargets: legal.map(m => m.to)
-    };
-    this.hoverDropPoint = null;
-    this.render();
-  }
-
-  handleDragMove(event) {
-    if (!this.dragState) return;
-    const target = document.elementFromPoint(event.clientX, event.clientY);
-    const pointButton = target?.closest(".bg-point");
-    const offSlot = target?.closest(".bg-off-slot");
-    const dropPoint = pointButton ? Number(pointButton.dataset.point) : null;
-
-    let newHover;
-    if (offSlot && this.dragState.legalTargets.includes("off")) {
-      newHover = "off";
-    } else if (typeof dropPoint === "number" && this.dragState.legalTargets.includes(dropPoint)) {
-      newHover = dropPoint;
-    } else {
-      newHover = null;
-    }
-
-    if (newHover === this.hoverDropPoint) return; // No visual change needed.
-
-    // Patch only the two affected elements instead of rebuilding the entire board.
-    this._clearHoverVisual(this.hoverDropPoint);
-    this._applyHoverVisual(newHover);
-    this.hoverDropPoint = newHover;
-  }
-
-  _clearHoverVisual(point) {
-    if (point === null || point === undefined) return;
-    if (point === "off") {
-      this.offSlotWhite?.classList.remove("drop-hover");
-      this.offSlotBlack?.classList.remove("drop-hover");
-    } else {
-      this.pointElements.get(point)?.classList.remove("drop-hover");
-    }
-  }
-
-  _applyHoverVisual(point) {
-    if (point === null || point === undefined) return;
-    if (point === "off") {
-      this.offSlotWhite?.classList.add("drop-hover");
-      this.offSlotBlack?.classList.add("drop-hover");
-    } else {
-      this.pointElements.get(point)?.classList.add("drop-hover");
-    }
-  }
-
-  handleDragEnd(event) {
-    if (!this.dragState) return;
-    if (event.pointerId !== this.dragState.pointerId) return;
-    const from = this.dragState.from;
-    const drop = this.hoverDropPoint;
-    this.dragState      = null;
-    this.hoverDropPoint = null;
-    this._destinations  = null;
-    if (drop === null) {
-      this.selectedFrom = null;
-      this.render();
-      return;
-    }
-    const result = this.engine.move(from, drop);
-    if (result.ok) {
-      this._pendingSnapTarget = typeof drop === "number" ? drop : null;
-      this.selectedFrom = null;
-      this.playCheckerSfx();
-    }
-    this.render();
-  }
-
   hasSelectableChecker(from) {
     const legal = this.engine.getLegalMoves();
     return legal.some((m) => m.from === from);
@@ -367,8 +274,6 @@ export class BackgammonUI {
 
     if (this.selectedFrom === index) point.classList.add("selected");
     if (hasLegal)                     point.classList.add("has-legal");
-    if (this.hoverDropPoint === index) point.classList.add("drop-hover");
-
     // Destination highlights come from the MoveManager's pre-computed map.
     if (this._destinations) {
       const pathInfo = this._destinations.get(index);
@@ -410,8 +315,6 @@ export class BackgammonUI {
         checker.classList.add("can-move");
       }
 
-      checker.dataset.fromPoint = String(index);
-      checker.addEventListener("pointerdown", e => this.startDragChecker(e, index));
       stack.appendChild(checker);
     }
 
@@ -505,10 +408,6 @@ export class BackgammonUI {
     if (canOff) {
       whiteSlot.classList.add("legal-off");
       blackSlot.classList.add("legal-off");
-    }
-    if (this.hoverDropPoint === "off") {
-      whiteSlot.classList.add("drop-hover");
-      blackSlot.classList.add("drop-hover");
     }
     whiteSlot.appendChild(this.buildOffStack("white", this.engine.off.white));
     blackSlot.appendChild(this.buildOffStack("black", this.engine.off.black));

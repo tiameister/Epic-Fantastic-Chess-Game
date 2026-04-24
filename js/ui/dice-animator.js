@@ -19,8 +19,9 @@
 const FACE_ANGLES = {
   1: { rx: 0,    ry: 0   },  // front
   2: { rx: 0,    ry: 90  },  // left  (cube turns right → left face shows)
-  3: { rx: -90,  ry: 0   },  // bottom(cube tilts back  → bottom comes up)
-  4: { rx: 90,   ry: 0   },  // top   (cube tilts fwd   → top shows)
+  // rotateX direction was inverted for top/bottom visual mapping.
+  3: { rx: 90,   ry: 0   },  // bottom
+  4: { rx: -90,  ry: 0   },  // top
   5: { rx: 0,    ry: -90 },  // right (cube turns left  → right shows)
   6: { rx: 0,    ry: 180 },  // back
 };

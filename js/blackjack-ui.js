@@ -298,7 +298,15 @@ export class BlackjackUI {
     if (res.event === "bust") {
       this._setStatus("Bust! 💥");
       await this._sleep(600);
-      await this._runDealerPhase();
+      // Bust does not auto-advance engine phase; close this hand explicitly.
+      this.engine.stand();
+      if (this.engine.phase === "dealer") {
+        await this._runDealerPhase();
+      } else {
+        this._refreshActionButtons();
+        this._showActionControls(true);
+        this._setStatus(`Playing hand ${this.engine.activeHandIndex + 1}…`);
+      }
       return;
     }
     if (res.event === "twenty_one") {
