@@ -13,6 +13,15 @@ export class BackgammonUI {
 
   init() {
     this.elements.backgammonDice.addEventListener("click", () => this.rollDiceFromUI());
+    this.elements.backgammonUndoBtn.addEventListener("click", () => {
+      const ok = this.engine.undo();
+      if (!ok) {
+        this.showToast(this.language === "tr" ? "Geri alınacak hamle yok" : "No move to undo");
+      }
+      this.selectedFrom = null;
+      this.hideGameOverModal();
+      this.render();
+    });
     this.elements.backgammonDoubleBtn.addEventListener("click", () => {
       const result = this.engine.offerDouble();
       if (!result.ok) {
@@ -43,6 +52,13 @@ export class BackgammonUI {
       this.lastWinAnnounced = "";
       this.engine.setDoublingEnabled(this.elements.backgammonDoublingToggle.checked);
       this.selectedFrom = null;
+      this.hideGameOverModal();
+      this.render();
+    });
+    this.elements.backgammonNewRoundBtn.addEventListener("click", () => {
+      this.engine.startNextGame();
+      this.selectedFrom = null;
+      this.hideGameOverModal();
       this.render();
     });
     this.elements.backgammonDoublingToggle.addEventListener("change", () => {
@@ -68,6 +84,8 @@ export class BackgammonUI {
     this.active = active;
     if (active) {
       this.render();
+    } else {
+      this.hideGameOverModal();
     }
   }
 
@@ -109,7 +127,7 @@ export class BackgammonUI {
     if (this.engine.movesLeft.length === 0) return;
     if (!this.hasSelectableChecker(fromPoint)) return;
     event.preventDefault();
-    const legal = this.engine.getLegalMoves().filter((m) => m.from === fromPoint && typeof m.to === "number");
+    const legal = this.engine.getLegalMoves().filter((m) => m.from === fromPoint);
     if (legal.length === 0) return;
     this.selectedFrom = fromPoint;
     this.dragState = {
@@ -127,12 +145,13 @@ export class BackgammonUI {
     const pointButton = target && typeof target.closest === "function"
       ? target.closest(".bg-point")
       : null;
+    const offSlot = target && typeof target.closest === "function" ? target.closest(".bg-off-slot") : null;
     const dropPoint = pointButton ? Number(pointButton.dataset.point) : null;
-    if (typeof dropPoint === "number" && this.dragState.legalTargets.includes(dropPoint)) {
+    if (offSlot && this.dragState.legalTargets.includes("off")) {
+      this.hoverDropPoint = "off";
+    } else if (typeof dropPoint === "number" && this.dragState.legalTargets.includes(dropPoint)) {
       this.hoverDropPoint = dropPoint;
-    } else {
-      this.hoverDropPoint = null;
-    }
+    } else this.hoverDropPoint = null;
     this.render();
   }
 
@@ -259,8 +278,21 @@ export class BackgammonUI {
     off.className = "bg-off";
     const whiteSlot = document.createElement("div");
     whiteSlot.className = "bg-off-slot white";
+    whiteSlot.addEventListener("click", () => this.handlePointClick("off"));
     const blackSlot = document.createElement("div");
     blackSlot.className = "bg-off-slot black";
+    blackSlot.addEventListener("click", () => this.handlePointClick("off"));
+    const legal = this.engine.getLegalMoves();
+    const canOff = this.selectedFrom !== null && legal.some((m) => m.from === this.selectedFrom && m.to === "off");
+    const bearingState = this.engine.canBearOff(this.engine.turn);
+    if (canOff || bearingState) {
+      whiteSlot.classList.add("legal-off");
+      blackSlot.classList.add("legal-off");
+    }
+    if (this.hoverDropPoint === "off") {
+      whiteSlot.classList.add("drop-hover");
+      blackSlot.classList.add("drop-hover");
+    }
     whiteSlot.appendChild(this.buildOffStack("white", this.engine.off.white));
     blackSlot.appendChild(this.buildOffStack("black", this.engine.off.black));
     off.appendChild(whiteSlot);
@@ -335,6 +367,7 @@ export class BackgammonUI {
         }
         this.lastWinAnnounced = key;
       }
+      this.showGameOverModal();
       return;
     }
     if (this.engine.doubleOfferedBy) {
@@ -377,6 +410,7 @@ export class BackgammonUI {
     this.renderLegalHints();
     this.updateDoubleButtons();
     this.updateCallout();
+    this.updateActionStates();
   }
 
   renderDice() {
@@ -441,6 +475,13 @@ export class BackgammonUI {
     this.elements.backgammonRejectDoubleBtn.classList.toggle("hidden", !show);
     this.elements.backgammonAcceptDoubleBtn.disabled = !pending;
     this.elements.backgammonRejectDoubleBtn.disabled = !pending;
+  }
+
+  updateActionStates() {
+    const hasMovesToUndo = this.engine.history.length > 0;
+    this.elements.backgammonUndoBtn.disabled = !hasMovesToUndo;
+    const canRoll = !this.engine.winner && !this.engine.doubleOfferedBy && this.engine.movesLeft.length === 0;
+    this.elements.backgammonRollBtn.disabled = !canRoll;
   }
 
   updateCallout() {
@@ -532,6 +573,19 @@ export class BackgammonUI {
       window.clearTimeout(this.lastToastTimeout);
     }
     this.lastToastTimeout = window.setTimeout(() => toast.classList.remove("show"), 1400);
+  }
+
+  showGameOverModal() {
+    if (!this.elements.backgammonGameOverModal || !this.engine.winner) return;
+    const t = this.translate();
+    this.elements.backgammonGameOverTitle.textContent = this.language === "tr" ? "Oyun Bitti" : "Game Over";
+    this.elements.backgammonGameOverText.textContent = `${this.colorName(this.engine.winner)} ${t.winsGame} (+${this.engine.lastWinPoints})`;
+    this.elements.backgammonGameOverModal.classList.remove("hidden");
+  }
+
+  hideGameOverModal() {
+    if (!this.elements.backgammonGameOverModal) return;
+    this.elements.backgammonGameOverModal.classList.add("hidden");
   }
 
   playTone(freq, duration, type = "sine", delay = 0) {

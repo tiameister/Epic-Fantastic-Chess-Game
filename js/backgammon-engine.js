@@ -9,6 +9,14 @@ function cloneState(engine) {
   };
 }
 
+function cloneGameState(gameState) {
+  return {
+    points: [...gameState.points],
+    bar: { ...gameState.bar },
+    off: { ...gameState.off }
+  };
+}
+
 export class BackgammonEngine {
   constructor() {
     this.reset();
@@ -40,6 +48,7 @@ export class BackgammonEngine {
     this.lastWinType = null;
     this.lastWinPoints = 0;
     this.whiteCheatMode = false;
+    this.history = [];
   }
 
   opposite(player) {
@@ -51,11 +60,17 @@ export class BackgammonEngine {
     if (this.doubleOfferedBy) return;
     if (this.movesLeft.length > 0) return;
     const [d1, d2] = (this.whiteCheatMode && this.turn === WHITE)
-      ? this.pickBestDiceForWhite()
+      ? this.getOptimalCheatDice({
+        points: this.points,
+        bar: this.bar,
+        off: this.off,
+        turn: this.turn
+      })
       : [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
     this.dice = [d1, d2];
     this.movesLeft = d1 === d2 ? [d1, d1, d1, d1] : [d1, d2];
     this.lastMove = null;
+    this.pushHistory();
     if (this.getLegalMoves().length === 0) {
       this.endTurn();
     }
@@ -94,11 +109,13 @@ export class BackgammonEngine {
   canBearOff(player, state = null) {
     const s = state || cloneState(this);
     if (s.bar[player] > 0) return false;
+    let homeCount = 0;
     for (let p = 1; p <= 24; p += 1) {
       if (!this.hasOwnChecker(p, player, s)) continue;
       if (!this.isInHome(p, player)) return false;
+      homeCount += this.pointCount(p, player, s);
     }
-    return true;
+    return (homeCount + s.off[player]) === 15;
   }
 
   destination(from, die, player) {
@@ -226,6 +243,7 @@ export class BackgammonEngine {
     const legal = this.getLegalMoves();
     const chosen = legal.find((m) => m.from === from && m.to === to);
     if (!chosen) return { ok: false, reason: "Illegal move." };
+    this.pushHistory();
     const before = cloneState(this);
     const after = this.applyMoveToState(before, chosen, this.turn);
     this.points = after.points;
@@ -274,6 +292,7 @@ export class BackgammonEngine {
   rejectDouble(player = this.turn) {
     if (!this.doubleOfferedBy) return { ok: false, reason: "No double offer pending." };
     if (player === this.doubleOfferedBy) return { ok: false, reason: "Offering player cannot reject." };
+    this.pushHistory();
     const winner = this.doubleOfferedBy;
     this.winner = winner;
     this.movesLeft = [];
@@ -316,6 +335,7 @@ export class BackgammonEngine {
     this.matchScore = preservedScore;
     this.targetScore = target;
     this.doublingEnabled = doublingEnabled;
+    this.history = [];
   }
 
   setDoublingEnabled(enabled) {
@@ -327,37 +347,88 @@ export class BackgammonEngine {
     }
   }
 
-  pickBestDiceForWhite() {
-    let bestPair = [6, 6];
+  pushHistory() {
+    this.history.push({
+      points: [...this.points],
+      bar: { ...this.bar },
+      off: { ...this.off },
+      turn: this.turn,
+      dice: [...this.dice],
+      movesLeft: [...this.movesLeft],
+      winner: this.winner,
+      cubeValue: this.cubeValue,
+      cubeOwner: this.cubeOwner,
+      doubleOfferedBy: this.doubleOfferedBy,
+      lastMove: this.lastMove ? { ...this.lastMove } : null,
+      lastWinType: this.lastWinType,
+      lastWinPoints: this.lastWinPoints
+    });
+    if (this.history.length > 120) {
+      this.history.shift();
+    }
+  }
+
+  undo() {
+    const prev = this.history.pop();
+    if (!prev) {
+      return false;
+    }
+    this.points = [...prev.points];
+    this.bar = { ...prev.bar };
+    this.off = { ...prev.off };
+    this.turn = prev.turn;
+    this.dice = [...prev.dice];
+    this.movesLeft = [...prev.movesLeft];
+    this.winner = prev.winner;
+    this.cubeValue = prev.cubeValue;
+    this.cubeOwner = prev.cubeOwner;
+    this.doubleOfferedBy = prev.doubleOfferedBy;
+    this.lastMove = prev.lastMove ? { ...prev.lastMove } : null;
+    this.lastWinType = prev.lastWinType;
+    this.lastWinPoints = prev.lastWinPoints;
+    return true;
+  }
+
+  getOptimalCheatDice(gameState) {
+    const state = cloneGameState(gameState);
+    let bestPair = null;
     let bestScore = -Infinity;
     for (let d1 = 1; d1 <= 6; d1 += 1) {
       for (let d2 = 1; d2 <= 6; d2 += 1) {
         const dice = d1 === d2 ? [d1, d1, d1, d1] : [d1, d2];
-        const score = this.bestOutcomeScoreForDice(cloneState(this), dice, WHITE);
+        const playable = this.getAllSingleMoves(state, dice, WHITE);
+        if (playable.length === 0) continue;
+        const score = this.bestOutcomeScoreForDice(state, dice, WHITE, d1, d2);
         if (score > bestScore) {
           bestScore = score;
           bestPair = [d1, d2];
         }
       }
     }
-    return bestPair;
+    return bestPair || [6, 5];
   }
 
-  bestOutcomeScoreForDice(state, dice, player) {
+  bestOutcomeScoreForDice(state, dice, player, rootD1 = null, rootD2 = null) {
     const moves = this.getAllSingleMoves(state, dice, player);
     if (moves.length === 0) {
-      return this.evaluateStateForWhite(state);
+      let terminal = this.evaluateStateForWhite(state);
+      if (player === WHITE && state.bar.white > 0) terminal -= 120;
+      return terminal;
     }
     let best = -Infinity;
+    const rootBonus = (rootD1 !== null && rootD2 !== null)
+      ? this.rootDiceStrategicBonus(state, rootD1, rootD2)
+      : 0;
     for (const move of moves) {
       const nextState = this.applyMoveToState(state, move, player);
       const nextDice = dice.filter((_, i) => i !== move.idx);
-      const score = this.bestOutcomeScoreForDice(nextState, nextDice, player);
+      const tactical = this.scoreTacticalMove(state, nextState, move, player);
+      const score = tactical + this.bestOutcomeScoreForDice(nextState, nextDice, player, rootD1, rootD2);
       if (score > best) {
         best = score;
       }
     }
-    return best;
+    return best + rootBonus;
   }
 
   evaluateStateForWhite(state) {
@@ -371,6 +442,47 @@ export class BackgammonEngine {
       - whitePip * 1.2
       + blackPip * 0.8
     );
+  }
+
+  rootDiceStrategicBonus(state, d1, d2) {
+    let bonus = 0;
+    const sum = d1 + d2;
+    if (state.bar.white > 0) {
+      const e1 = this.entryPoint(d1, WHITE);
+      const e2 = this.entryPoint(d2, WHITE);
+      if (this.isOpenFor(e1, WHITE, state)) bonus += 140;
+      if (this.isOpenFor(e2, WHITE, state)) bonus += 140;
+      if (d1 === d2 && this.isOpenFor(e1, WHITE, state)) bonus += 80;
+    }
+    if (this.canBearOff(WHITE, state)) {
+      bonus += sum * 12;
+      if (d1 === d2) bonus += 24;
+      if (d1 === 6 || d2 === 6) bonus += 12;
+    }
+    return bonus;
+  }
+
+  scoreTacticalMove(beforeState, afterState, move, player) {
+    if (player !== WHITE) return 0;
+    let score = 0;
+    const wasHit = afterState.bar.black > beforeState.bar.black;
+    if (wasHit) {
+      score += 95;
+      if (typeof move.to === "number" && this.pointCount(move.to, WHITE, afterState) >= 2) {
+        score += 28;
+      }
+    }
+    if (move.to === "off") score += 62;
+    if (typeof move.to === "number" && this.pointCount(move.to, WHITE, afterState) >= 2) {
+      score += 36;
+    }
+    if (typeof move.from === "number" && this.pointCount(move.from, WHITE, beforeState) === 1) {
+      score -= 10;
+    }
+    if (typeof move.to === "number" && this.pointCount(move.to, WHITE, afterState) === 1) {
+      score -= 6;
+    }
+    return score;
   }
 
   pipCount(player, state = null) {

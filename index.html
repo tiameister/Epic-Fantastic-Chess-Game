@@ -266,6 +266,7 @@
       </section>
       <section class="actions">
         <button id="backgammonRollBtn" type="button">Roll Dice</button>
+        <button id="backgammonUndoBtn" type="button">Undo</button>
         <button id="backgammonDoubleBtn" type="button">Offer Double</button>
         <button id="backgammonAcceptDoubleBtn" type="button">Accept Double</button>
         <button id="backgammonRejectDoubleBtn" type="button">Reject Double</button>
@@ -284,6 +285,13 @@
       <div id="backgammonToast" class="backgammon-toast" aria-live="polite"></div>
       <section id="backgammonBoard" class="backgammon-board"></section>
       <ul id="backgammonHints" class="meta-list hidden"></ul>
+      <section id="backgammonGameOverModal" class="promotion-modal hidden" aria-live="polite">
+        <div class="promotion-card">
+          <h3 id="backgammonGameOverTitle">Game Over</h3>
+          <p id="backgammonGameOverText">Winner</p>
+          <button id="backgammonNewRoundBtn" type="button">Start Next Round</button>
+        </div>
+      </section>
     </section>
   </main>
 
