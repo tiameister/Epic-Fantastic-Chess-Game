@@ -1,4 +1,4 @@
-import { COLOR, STATE } from "./constants.js";
+import { COLOR, STATE, PROMOTION_TYPES } from "./constants.js";
 
 const BACK_RANK = ["rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook"];
 
@@ -393,15 +393,33 @@ export class ChessEngine {
     }
 
     const candidateMoves = this.getPseudoMovesForPiece(row, col, this.board);
-    return candidateMoves.filter((move) => {
+    const legal = [];
+
+    for (const move of candidateMoves) {
+      const isPromotion = piece.type === "pawn" && (move.row === 0 || move.row === 7);
+
+      // King-safety check: all promotion types yield the same board position for the
+      // moving side, so a single queen-promotion simulation is sufficient.
       const simulated = this.applyMoveOnBoard(
         this.board,
         { row, col },
         { row: move.row, col: move.col },
-        move
+        isPromotion ? { ...move, promotionType: "queen" } : move
       );
-      return !this.isKingInCheck(piece.color, simulated);
-    });
+      if (this.isKingInCheck(piece.color, simulated)) {
+        continue;
+      }
+
+      if (isPromotion) {
+        for (const promotionType of PROMOTION_TYPES) {
+          legal.push({ ...move, promotionType });
+        }
+      } else {
+        legal.push(move);
+      }
+    }
+
+    return legal;
   }
 
   hasAnyLegalMove(color) {
@@ -469,7 +487,12 @@ export class ChessEngine {
 
   move(from, to, options = {}) {
     const legalMoves = this.getLegalMoves(from.row, from.col);
-    const chosen = legalMoves.find((m) => m.row === to.row && m.col === to.col);
+    // When a promotionType is specified, prefer the exact match so the correct
+    // piece type is recorded in the move metadata. Fall back to any square match.
+    const chosen = options.promotionType
+      ? (legalMoves.find((m) => m.row === to.row && m.col === to.col && m.promotionType === options.promotionType)
+          ?? legalMoves.find((m) => m.row === to.row && m.col === to.col))
+      : legalMoves.find((m) => m.row === to.row && m.col === to.col);
     if (!chosen) {
       return { ok: false, reason: "Illegal move." };
     }
@@ -704,9 +727,83 @@ export class ChessEngine {
     return true;
   }
 
+  /** Returns true when the game has ended for any reason. */
+  isGameOver() {
+    return (
+      this.gameState === STATE.CHECKMATE
+      || this.gameState === STATE.STALEMATE
+      || this.gameState === STATE.DRAW
+      || this.gameState === STATE.TIMEOUT
+      || this.gameState === STATE.RESIGN
+    );
+  }
+
+  /** Ends the game by resignation. loserColor is the side that resigns. */
+  resign(loserColor) {
+    this.gameState = STATE.RESIGN;
+    this.winner = this.opposite(loserColor);
+    this.drawReason = "";
+  }
+
   endByTimeout(loserColor) {
     this.gameState = STATE.TIMEOUT;
     this.winner = this.opposite(loserColor);
     this.drawReason = "";
+  }
+
+  /**
+   * Loads a full FEN string (all 6 fields).
+   * Falls back to placement-only behaviour when only 1 field is present.
+   */
+  loadFen(fen) {
+    const parts = fen.trim().split(/\s+/);
+    const placement = parts[0];
+    const turnChar = parts[1] || "w";
+    const castling = parts[2] || "-";
+    const epSquare = parts[3] || "-";
+    const halfmove = parseInt(parts[4] || "0", 10);
+
+    const turn = turnChar === "b" ? COLOR.BLACK : COLOR.WHITE;
+
+    // Load placement with hasMoved = false so we can override castling rights below.
+    if (!this.loadFenPlacement(placement, turn, true)) {
+      return false;
+    }
+
+    // Apply castling rights from the FEN castling field.
+    const wk  = this.getPiece(7, 4, this.board);
+    const wrh = this.getPiece(7, 7, this.board);
+    const wra = this.getPiece(7, 0, this.board);
+    const bk  = this.getPiece(0, 4, this.board);
+    const brh = this.getPiece(0, 7, this.board);
+    const bra = this.getPiece(0, 0, this.board);
+
+    if (wk)  wk.hasMoved  = !castling.includes("K") && !castling.includes("Q");
+    if (wrh) wrh.hasMoved = !castling.includes("K");
+    if (wra) wra.hasMoved = !castling.includes("Q");
+    if (bk)  bk.hasMoved  = !castling.includes("k") && !castling.includes("q");
+    if (brh) brh.hasMoved = !castling.includes("k");
+    if (bra) bra.hasMoved = !castling.includes("q");
+
+    // Parse en-passant target square (e.g. "e3").
+    if (epSquare !== "-" && epSquare.length >= 2) {
+      const epCol = epSquare.charCodeAt(0) - 97;
+      const epRank = parseInt(epSquare[1], 10);
+      const epRow = 8 - epRank;
+      const pawnRow = turn === COLOR.WHITE ? epRow + 1 : epRow - 1;
+      this.enPassantTarget = {
+        row: epRow,
+        col: epCol,
+        pawnRow,
+        pawnCol: epCol,
+        captureColor: turn
+      };
+    }
+
+    this.halfmoveClock = Number.isFinite(halfmove) ? halfmove : 0;
+    this.positionCounts = new Map();
+    this.recordPosition();
+    this.evaluateGameState();
+    return true;
   }
 }

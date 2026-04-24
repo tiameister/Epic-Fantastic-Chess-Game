@@ -9,6 +9,10 @@ export class BackgammonUI {
     this.lastToastTimeout = null;
     this.dragState = null;
     this.hoverDropPoint = null;
+    // Cached DOM references populated by renderBoard() for O(1) drag-hover updates.
+    this.pointElements = new Map();
+    this.offSlotWhite = null;
+    this.offSlotBlack = null;
   }
 
   init() {
@@ -142,17 +146,45 @@ export class BackgammonUI {
   handleDragMove(event) {
     if (!this.dragState) return;
     const target = document.elementFromPoint(event.clientX, event.clientY);
-    const pointButton = target && typeof target.closest === "function"
-      ? target.closest(".bg-point")
-      : null;
-    const offSlot = target && typeof target.closest === "function" ? target.closest(".bg-off-slot") : null;
+    const pointButton = target?.closest(".bg-point");
+    const offSlot = target?.closest(".bg-off-slot");
     const dropPoint = pointButton ? Number(pointButton.dataset.point) : null;
+
+    let newHover;
     if (offSlot && this.dragState.legalTargets.includes("off")) {
-      this.hoverDropPoint = "off";
+      newHover = "off";
     } else if (typeof dropPoint === "number" && this.dragState.legalTargets.includes(dropPoint)) {
-      this.hoverDropPoint = dropPoint;
-    } else this.hoverDropPoint = null;
-    this.render();
+      newHover = dropPoint;
+    } else {
+      newHover = null;
+    }
+
+    if (newHover === this.hoverDropPoint) return; // No visual change needed.
+
+    // Patch only the two affected elements instead of rebuilding the entire board.
+    this._clearHoverVisual(this.hoverDropPoint);
+    this._applyHoverVisual(newHover);
+    this.hoverDropPoint = newHover;
+  }
+
+  _clearHoverVisual(point) {
+    if (point === null || point === undefined) return;
+    if (point === "off") {
+      this.offSlotWhite?.classList.remove("drop-hover");
+      this.offSlotBlack?.classList.remove("drop-hover");
+    } else {
+      this.pointElements.get(point)?.classList.remove("drop-hover");
+    }
+  }
+
+  _applyHoverVisual(point) {
+    if (point === null || point === undefined) return;
+    if (point === "off") {
+      this.offSlotWhite?.classList.add("drop-hover");
+      this.offSlotBlack?.classList.add("drop-hover");
+    } else {
+      this.pointElements.get(point)?.classList.add("drop-hover");
+    }
   }
 
   handleDragEnd(event) {
@@ -208,6 +240,7 @@ export class BackgammonUI {
     point.type = "button";
     point.className = `bg-point ${isTop ? "top" : "bottom"} ${(index % 2 === 0) ? "light" : "dark"}`;
     point.dataset.point = String(index);
+    this.pointElements.set(index, point);
     point.addEventListener("click", () => this.handlePointClick(index));
     const count = this.engine.points[index];
     const owner = count > 0 ? "white" : count < 0 ? "black" : "none";
@@ -282,6 +315,9 @@ export class BackgammonUI {
     const blackSlot = document.createElement("div");
     blackSlot.className = "bg-off-slot black";
     blackSlot.addEventListener("click", () => this.handlePointClick("off"));
+    // Cache for efficient drag-hover updates.
+    this.offSlotWhite = whiteSlot;
+    this.offSlotBlack = blackSlot;
     const legal = this.engine.getLegalMoves();
     const canOff = this.selectedFrom !== null && legal.some((m) => m.from === this.selectedFrom && m.to === "off");
     const bearingState = this.engine.canBearOff(this.engine.turn);
@@ -330,6 +366,9 @@ export class BackgammonUI {
   renderBoard() {
     const board = this.elements.backgammonBoard;
     board.innerHTML = "";
+    this.pointElements.clear();
+    this.offSlotWhite = null;
+    this.offSlotBlack = null;
     const left = document.createElement("div");
     left.className = "bg-half";
     const right = document.createElement("div");

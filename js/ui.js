@@ -1,8 +1,11 @@
-import { COLOR, PIECE_ICONS, STATE } from "./constants.js";
+import { COLOR, EVAL_THRESHOLDS, PIECE_ICONS, STATE } from "./constants.js";
 import { PRESETS } from "./presets.js";
 import { evaluatePosition, materialScore, scoreToBarPercent } from "./evaluation.js";
 import { getTacticalSignal } from "./tactical-eval.js";
 import { createStateStore } from "./state/store.js";
+import { ChessBoardRenderer } from "./ui/board-renderer.js";
+import { ChessClock } from "./ui/chess-clock.js";
+import { ChessHistoryManager } from "./ui/chess-history.js";
 
 export class ChessUI {
   constructor(engine, elements, sound, progression = null, evaluator = null, training = null, storage = null) {
@@ -13,38 +16,64 @@ export class ChessUI {
     this.evaluator = evaluator;
     this.training = training;
     this.storage = storage;
-    this.selected = null;
-    this.legalMoves = [];
-    this.orientation = COLOR.WHITE;
+
+    // ── Sub-modules ───────────────────────────────────────────────────────
+    this.boardRenderer = new ChessBoardRenderer({
+      board: elements.board,
+      particleLayer: elements.particleLayer,
+      boardFrame: elements.boardFrame
+    });
+
+    this.clock = new ChessClock(
+      {
+        whiteTimeLabel: elements.whiteTimeLabel,
+        blackTimeLabel: elements.blackTimeLabel,
+        pauseClockBtn:  elements.pauseClockBtn,
+        timeControl:    elements.timeControl
+      },
+      engine,
+      (loserColor) => {
+        this.engine.endByTimeout(loserColor);
+        this.render("Time expired.");
+      }
+    );
+
+    this.history = new ChessHistoryManager(
+      {
+        historyList:      elements.historyList,
+        analysisScrubber: elements.analysisScrubber,
+        evalGraph:        elements.evalGraph,
+        reviewList:       elements.reviewList
+      },
+      engine,
+      (ply) => {
+        // Called by ChessHistoryManager.goTo() after restoring the snapshot.
+        this.selected      = null;
+        this.legalMoves    = [];
+        this.stateStore.dispatch({ type: "UI/CLEAR_SELECTION" });
+        this.render(this.history.isViewing ? `Viewing move ${ply}.` : "Back to latest position.");
+      }
+    );
+
+    this.history.setBadgeFn((label) => this.getQualityBadge(label));
+
+    // ── UI state ──────────────────────────────────────────────────────────
+    this.selected       = null;
+    this.legalMoves     = [];
+    this.orientation    = COLOR.WHITE;
     this.autoFlipEnabled = false;
-    this.timerId = null;
-    this.isClockPaused = false;
-    this.hasClockStarted = false;
-    this.isUntimed = false;
-    this.incrementSeconds = 0;
-    this.delaySeconds = 0;
-    this.activeDelayRemaining = 0;
-    this.timeRemaining = {
-      white: 600,
-      black: 600
-    };
-    this.clockSnapshotHistory = [];
-    this.isEvalVisible = true;
+    this.isEvalVisible  = true;
     this.lastEvaluationScore = this.evaluateScore();
-    this.currentMoveQuality = "Neutral";
+    this.currentMoveQuality  = "Neutral";
     this.heartbeatLevel = 0;
-    this.squareElements = new Map();
-    this.matchRecorded = false;
-    this.matchStats = this.createEmptyMatchStats();
+    this.matchRecorded  = false;
+    this.matchStats     = this.createEmptyMatchStats();
     this.lastEvalSnapshot = { score: 0, label: "" };
     this.pendingPromotion = null;
-    this.timelineSnapshots = [];
-    this.currentPly = 0;
-    this.isViewingHistory = false;
-    this.activeTab = "game";
-    this.layoutPreset = "default";
-    this.gamePersisted = false;
-    this.lastBoardRenderKey = "";
+    this.activeTab      = "game";
+    this.layoutPreset   = "default";
+    this.gamePersisted  = false;
+
     this.stateStore = createStateStore({
       gameState: { turn: this.engine.turn, status: this.engine.gameState, result: null, ply: 0 },
       uiState: {
@@ -76,10 +105,9 @@ export class ChessUI {
     });
 
     this.elements.timeControl.addEventListener("change", () => {
-      this.resetClocks();
-      this.clockSnapshotHistory = [];
-      this.hasClockStarted = this.engine.moveHistory.some((move) => move.turn === COLOR.WHITE);
-      this.startClock();
+      this.clock.reset();
+      this.clock.hasStarted = this.engine.moveHistory.some((move) => move.turn === COLOR.WHITE);
+      this.clock.start();
       this.render("Time control updated.");
     });
 
@@ -104,35 +132,28 @@ export class ChessUI {
       this.elements.toggleEvalBtn.textContent = this.isEvalVisible ? "Hide Eval" : "Show Eval";
       this.render(this.isEvalVisible ? "Evaluation bar shown." : "Evaluation bar hidden.");
     });
-    this.elements.pauseClockBtn.addEventListener("click", () => this.togglePauseClock());
+    this.elements.pauseClockBtn.addEventListener("click", () => {
+      const result = this.clock.toggle();
+      if (result) this.render(result === "paused" ? "Clock paused." : "Clock resumed.");
+    });
     this.elements.offerDrawBtn.addEventListener("click", () => this.offerDraw());
     this.elements.resignBtn.addEventListener("click", () => this.resignGame());
     this.elements.rematchBtn.addEventListener("click", () => this.rematch());
 
     this.elements.undoBtn.addEventListener("click", () => {
-      if (this.isViewingHistory) {
-        this.goToPly(this.timelineSnapshots.length - 1);
+      if (this.history.isViewing) {
+        this.history.goTo(this.history.length - 1);
       }
       const didUndo = this.engine.undo();
       if (!didUndo) {
         this.render("No moves available to undo.");
         return;
       }
-      if (this.timelineSnapshots.length > 1) {
-        this.timelineSnapshots.pop();
-      }
-      this.currentPly = this.timelineSnapshots.length - 1;
-      this.isViewingHistory = false;
-      const prevClocks = this.clockSnapshotHistory.pop();
-      if (prevClocks) {
-        this.timeRemaining.white = prevClocks.white;
-        this.timeRemaining.black = prevClocks.black;
-      }
-      this.hasClockStarted = this.engine.moveHistory.some((move) => move.turn === COLOR.WHITE);
-      if (this.autoFlipEnabled) {
-        this.orientation = this.engine.turn;
-      }
-      this.startClock();
+      this.history.pop();
+      this.clock.popSnapshot();
+      this.clock.hasStarted = this.engine.moveHistory.some((m) => m.turn === COLOR.WHITE);
+      if (this.autoFlipEnabled) this.orientation = this.engine.turn;
+      this.clock.start();
       this.selected = null;
       this.legalMoves = [];
       this.stateStore.dispatch({ type: "UI/CLEAR_SELECTION" });
@@ -148,18 +169,17 @@ export class ChessUI {
       this.resetGame();
     });
 
-    this.elements.historyStartBtn.addEventListener("click", () => this.goToPly(0));
-    this.elements.historyPrevBtn.addEventListener("click", () => this.goToPly(Math.max(0, this.currentPly - 1)));
-    this.elements.historyNextBtn.addEventListener("click", () => this.goToPly(Math.min(this.timelineSnapshots.length - 1, this.currentPly + 1)));
-    this.elements.historyEndBtn.addEventListener("click", () => this.goToPly(this.timelineSnapshots.length - 1));
+    this.elements.historyStartBtn.addEventListener("click", () => this.history.goTo(0));
+    this.elements.historyPrevBtn.addEventListener("click", () => this.history.goTo(Math.max(0, this.history.currentPly - 1)));
+    this.elements.historyNextBtn.addEventListener("click", () => this.history.goTo(Math.min(this.history.length - 1, this.history.currentPly + 1)));
+    this.elements.historyEndBtn.addEventListener("click", () => this.history.goTo(this.history.length - 1));
     this.elements.exportPgnBtn.addEventListener("click", () => this.exportPgn());
     this.elements.importPgnBtn.addEventListener("click", () => this.elements.importPgnInput.click());
     this.elements.importPgnInput.addEventListener("change", (event) => this.importPgn(event));
     this.elements.continueLastBtn.addEventListener("click", () => this.continueLastGame());
     this.elements.savedGamesSearch.addEventListener("input", () => this.renderSavedGames());
     this.elements.analysisScrubber.addEventListener("input", () => {
-      const value = Number(this.elements.analysisScrubber.value);
-      this.goToPly(value);
+      this.history.goTo(Number(this.elements.analysisScrubber.value));
     });
     this.elements.trainingOffBtn.addEventListener("click", () => this.activateTrainingMode("off"));
     this.elements.openingTrainerBtn.addEventListener("click", () => this.activateTrainingMode("opening"));
@@ -178,9 +198,9 @@ export class ChessUI {
     this.applyLayoutPreset();
     this.setActiveTab("game");
     this.registerKeyboardShortcuts();
-    this.rebuildTimelineFromCurrent();
-    this.resetClocks();
-    this.startClock();
+    this.history.rebuild();
+    this.clock.reset();
+    this.clock.start();
     this.renderProfile();
     this.renderMetaProgress();
     this.renderTrainingStatus();
@@ -201,11 +221,7 @@ export class ChessUI {
     this.elements.presetSelect.value = "standard";
     this.selected = null;
     this.legalMoves = [];
-    this.clockSnapshotHistory = [];
-    this.hasClockStarted = false;
     this.orientation = COLOR.WHITE;
-    this.isClockPaused = false;
-    this.activeDelayRemaining = this.delaySeconds;
     this.currentMoveQuality = "Neutral";
     this.lastEvaluationScore = this.evaluateScore();
     this.sound.stopHeartbeat();
@@ -217,11 +233,11 @@ export class ChessUI {
     this.pendingPromotion = null;
     this.gamePersisted = false;
     this.closePromotionPrompt();
-    this.rebuildTimelineFromCurrent();
+    this.history.rebuild();
     this.toggleGameOverPanel(false);
     this.renderTrainingStatus();
-    this.resetClocks();
-    this.startClock();
+    this.clock.reset();
+    this.clock.start();
     this.render("New game started.");
   }
 
@@ -247,6 +263,8 @@ export class ChessUI {
         return `${this.colorName(this.engine.turn)} in Check`;
       case STATE.CHECKMATE:
         return `Checkmate - ${this.colorName(this.engine.winner)} wins`;
+      case STATE.RESIGN:
+        return `${this.colorName(this.engine.winner)} wins by resignation`;
       case STATE.STALEMATE:
         return "Stalemate - Draw";
       case STATE.DRAW:
@@ -266,7 +284,7 @@ export class ChessUI {
   }
 
   handleSquareClick(row, col) {
-    if (this.isClockPaused) {
+    if (this.clock.isPaused) {
       this.setMessage("Clock paused. Resume before making a move.");
       return;
     }
@@ -274,12 +292,7 @@ export class ChessUI {
       this.setMessage("Finish pawn promotion first.");
       return;
     }
-    if (
-      this.engine.gameState === STATE.CHECKMATE
-      || this.engine.gameState === STATE.STALEMATE
-      || this.engine.gameState === STATE.DRAW
-      || this.engine.gameState === STATE.TIMEOUT
-    ) {
+    if (this.engine.isGameOver()) {
       this.setMessage("Game over. Press New Game to play again.");
       return;
     }
@@ -308,7 +321,7 @@ export class ChessUI {
 
     const isLegalMove = this.legalMoves.some((m) => m.row === row && m.col === col);
     if (isLegalMove) {
-      const clockSnapshot = { ...this.timeRemaining };
+      const clockSnapshot = this.clock.snapshot();
       const movingSide = this.engine.turn;
       const scoreBefore = this.evaluateScore();
       const materialBefore = materialScore(this.engine.board);
@@ -347,7 +360,7 @@ export class ChessUI {
         materialBefore,
         bestMoveHint
       });
-      this.startClock();
+      this.clock.start();
       this.render(result.ok ? "Move completed." : result.reason);
       this.playStateSound();
       return;
@@ -362,7 +375,7 @@ export class ChessUI {
   }
 
   commitMove(context, promotionType = null) {
-    this.exitHistoryViewIfNeeded();
+    this.history.exitViewIfNeeded();
     const result = this.engine.move(context.from, context.to, promotionType ? { promotionType } : {});
     if (!result.ok) {
       return result;
@@ -379,13 +392,10 @@ export class ChessUI {
     } = context;
 
     if (movingSide === COLOR.WHITE) {
-      this.hasClockStarted = true;
+      this.clock.hasStarted = true;
     }
-    if (!this.isUntimed && this.incrementSeconds > 0) {
-      this.timeRemaining[movingSide] += this.incrementSeconds;
-    }
-    this.activeDelayRemaining = this.delaySeconds;
-    this.clockSnapshotHistory.push(clockSnapshot);
+    this.clock.addIncrement(movingSide);
+    this.clock.pushSnapshot(clockSnapshot);
     const scoreAfter = this.evaluateScore();
     const materialAfter = materialScore(this.engine.board);
     const moveAssessment = this.assessMoveQuality(
@@ -413,10 +423,10 @@ export class ChessUI {
       this.matchStats.blunders[movingSide] += 1;
     }
     this.playMoveSound(chosen, moveAssessment);
-    this.applyMoveQualityEffects(moveAssessment);
+    this.boardRenderer.applyMoveQualityEffects(moveAssessment);
     if (moveAssessment.isCapture) {
       this.matchStats.captures[movingSide] += 1;
-      this.spawnCaptureParticles(to.row, to.col, targetBeforeMove?.color ?? this.oppositeColor(movingSide));
+      this.boardRenderer.spawnCaptureParticles(to.row, to.col, targetBeforeMove?.color ?? this.oppositeColor(movingSide));
       if (this.progression) {
         this.progression.recordCapture(1);
       }
@@ -435,9 +445,7 @@ export class ChessUI {
     }
     this.lastEvaluationScore = scoreAfter;
     this.awardMoveXp(moveAssessment);
-    this.timelineSnapshots.push(this.engine.getSnapshot());
-    this.currentPly = this.timelineSnapshots.length - 1;
-    this.isViewingHistory = false;
+    this.history.push(this.engine.getSnapshot());
     this.persistOngoingGame();
     return result;
   }
@@ -484,16 +492,39 @@ export class ChessUI {
     this.lastEvalSnapshot = this.getEvaluationSnapshot();
     this.renderProfile();
     this.renderMetaProgress();
-    this.renderHistory();
-    this.renderAnalysisPanel();
+    this.history.renderHistory((ply) => this.history.goTo(ply));
+    this.history.renderAnalysis();
+    this.renderSavedGames();
     this.renderTrainingStatus();
-    this.renderTimers();
+    this.clock.render();
     this.renderEvaluation(this.lastEvalSnapshot);
-    this.renderBoard();
+    this.boardRenderer.render({
+      engine:      this.engine,
+      selected:    this.selected,
+      legalMoves:  this.legalMoves,
+      orientation: this.orientation
+    });
+    // Re-attach click handlers after each board rebuild.
+    this._attachBoardClickHandlers();
     this.updateGameOverPanel();
     this.updateCriticalAtmosphere();
     this.sound.updateMood(this.lastEvalSnapshot.score, this.engine.turn);
     this.syncStore();
+  }
+
+  _attachBoardClickHandlers() {
+    for (const [key, square] of this.boardRenderer.squareElements) {
+      const [row, col] = key.split(",").map(Number);
+      // Clone with replaceWith to avoid stacking duplicate listeners on reuse.
+      // Since renderBoard() rebuilds from scratch each time, squares are always new.
+      square.addEventListener("click", () => this.handleSquareClick(row, col));
+      square.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          this.handleSquareClick(row, col);
+        }
+      });
+    }
   }
 
   setActiveTab(tabKey) {
@@ -540,8 +571,6 @@ export class ChessUI {
     this.selected = null;
     this.legalMoves = [];
     this.stateStore.dispatch({ type: "UI/CLEAR_SELECTION" });
-    this.clockSnapshotHistory = [];
-    this.hasClockStarted = false;
     this.pendingPromotion = null;
     this.closePromotionPrompt();
     this.orientation = this.autoFlipEnabled ? this.engine.turn : COLOR.WHITE;
@@ -552,12 +581,10 @@ export class ChessUI {
     this.heartbeatLevel = 0;
     this.elements.boardFrame.classList.remove("critical", "blunder-hit", "glitch-hit");
     this.matchStats = this.createEmptyMatchStats();
-    this.rebuildTimelineFromCurrent();
-    this.isClockPaused = false;
-    this.elements.pauseClockBtn.textContent = "Pause Clock";
+    this.history.rebuild();
     this.toggleGameOverPanel(false);
-    this.resetClocks();
-    this.startClock();
+    this.clock.reset();
+    this.clock.start();
     this.playSound("move");
     this.renderTrainingStatus();
     this.render(`${preset.name} loaded.`);
@@ -603,9 +630,9 @@ export class ChessUI {
     this.engine.loadFenPlacement(puzzle.fen, puzzle.turn, false);
     this.selected = null;
     this.legalMoves = [];
-    this.rebuildTimelineFromCurrent();
-    this.hasClockStarted = false;
-    this.resetClocks();
+    this.history.rebuild();
+    this.clock.hasStarted = false;
+    this.clock.reset();
     this.renderTrainingStatus();
   }
 
@@ -613,9 +640,9 @@ export class ChessUI {
     this.engine.loadFenPlacement(drill.fen, drill.turn, false);
     this.selected = null;
     this.legalMoves = [];
-    this.rebuildTimelineFromCurrent();
-    this.hasClockStarted = false;
-    this.resetClocks();
+    this.history.rebuild();
+    this.clock.hasStarted = false;
+    this.clock.reset();
     this.renderTrainingStatus();
   }
 
@@ -678,139 +705,25 @@ export class ChessUI {
     document.body.dataset.theme = themeName || "default";
   }
 
-  resetClocks() {
-    const [baseValue, incrementValue, delayValue] = String(this.elements.timeControl.value || "600|0|0").split("|");
-    const baseSeconds = Number(baseValue);
-    this.incrementSeconds = Number(incrementValue || 0);
-    this.delaySeconds = Number(delayValue || 0);
-    this.activeDelayRemaining = this.delaySeconds;
-    this.isUntimed = baseSeconds <= 0;
-    this.timeRemaining.white = baseSeconds;
-    this.timeRemaining.black = baseSeconds;
-    this.isClockPaused = false;
-    this.elements.pauseClockBtn.textContent = "Pause Clock";
-  }
-
-  formatTime(seconds) {
-    const safe = Math.max(0, seconds);
-    const m = Math.floor(safe / 60).toString().padStart(2, "0");
-    const s = (safe % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  }
-
-  renderTimers() {
-    if (this.isUntimed) {
-      this.elements.whiteTimeLabel.textContent = "∞";
-      this.elements.blackTimeLabel.textContent = "∞";
-      return;
-    }
-    this.elements.whiteTimeLabel.textContent = this.formatTime(this.timeRemaining.white);
-    this.elements.blackTimeLabel.textContent = this.formatTime(this.timeRemaining.black);
-  }
-
-  startClock() {
-    if (this.timerId) {
-      window.clearInterval(this.timerId);
-    }
-    if (
-      !this.hasClockStarted
-      || this.isClockPaused
-      || this.isUntimed
-      || (
-        this.timeRemaining.white <= 0
-        && this.timeRemaining.black <= 0
-      )
-    ) {
-      return;
-    }
-
-    if (
-      this.engine.gameState === STATE.CHECKMATE
-      || this.engine.gameState === STATE.STALEMATE
-      || this.engine.gameState === STATE.DRAW
-      || this.engine.gameState === STATE.TIMEOUT
-    ) {
-      return;
-    }
-    this.activeDelayRemaining = this.delaySeconds;
-
-    this.timerId = window.setInterval(() => {
-      const side = this.engine.turn;
-      if (this.activeDelayRemaining > 0) {
-        this.activeDelayRemaining -= 1;
-        this.renderTimers();
-        return;
-      }
-      this.timeRemaining[side] -= 1;
-      if (this.timeRemaining[side] <= 0) {
-        this.timeRemaining[side] = 0;
-        this.engine.endByTimeout(side);
-        window.clearInterval(this.timerId);
-      }
-      this.renderTimers();
-      if (this.engine.gameState === STATE.TIMEOUT) {
-        this.render("Time expired.");
-      }
-    }, 1000);
-  }
-
-  togglePauseClock() {
-    if (
-      this.engine.gameState === STATE.CHECKMATE
-      || this.engine.gameState === STATE.STALEMATE
-      || this.engine.gameState === STATE.DRAW
-      || this.engine.gameState === STATE.TIMEOUT
-    ) {
-      return;
-    }
-    this.isClockPaused = !this.isClockPaused;
-    this.elements.pauseClockBtn.textContent = this.isClockPaused ? "Resume Clock" : "Pause Clock";
-    if (this.isClockPaused && this.timerId) {
-      window.clearInterval(this.timerId);
-      this.timerId = null;
-      this.render("Clock paused.");
-      return;
-    }
-    this.startClock();
-    this.render("Clock resumed.");
-  }
-
   resignGame() {
-    if (
-      this.engine.gameState === STATE.CHECKMATE
-      || this.engine.gameState === STATE.STALEMATE
-      || this.engine.gameState === STATE.DRAW
-      || this.engine.gameState === STATE.TIMEOUT
-    ) {
+    if (this.engine.isGameOver()) {
       return;
     }
-    this.engine.gameState = STATE.CHECKMATE;
-    this.engine.winner = this.oppositeColor(this.engine.turn);
-    this.engine.drawReason = "";
-    if (this.timerId) {
-      window.clearInterval(this.timerId);
-      this.timerId = null;
-    }
+    const resigningSide = this.engine.turn;
+    this.engine.resign(resigningSide);
+    this.clock.stop();
     this.playSound("gameOver");
-    this.render(`${this.colorName(this.engine.turn)} resigned.`);
+    this.render(`${this.colorName(resigningSide)} resigned.`);
   }
 
   offerDraw() {
-    if (
-      this.engine.gameState === STATE.CHECKMATE
-      || this.engine.gameState === STATE.STALEMATE
-      || this.engine.gameState === STATE.DRAW
-      || this.engine.gameState === STATE.TIMEOUT
-    ) {
+    if (this.engine.isGameOver()) {
       return;
     }
     this.engine.gameState = STATE.DRAW;
     this.engine.winner = null;
     this.engine.drawReason = "Draw agreed (local)";
-    if (this.timerId) {
-      window.clearInterval(this.timerId);
-      this.timerId = null;
-    }
+    this.clock.stop();
     this.playSound("gameOver");
     this.render("Draw agreed.");
   }
@@ -821,12 +734,7 @@ export class ChessUI {
   }
 
   updateGameOverPanel() {
-    const isGameOver = (
-      this.engine.gameState === STATE.CHECKMATE
-      || this.engine.gameState === STATE.STALEMATE
-      || this.engine.gameState === STATE.DRAW
-      || this.engine.gameState === STATE.TIMEOUT
-    );
+    const isGameOver = this.engine.isGameOver();
     this.toggleGameOverPanel(isGameOver);
     if (!isGameOver) {
       return;
@@ -846,6 +754,11 @@ export class ChessUI {
     if (this.engine.gameState === STATE.CHECKMATE) {
       this.elements.gameOverTitle.textContent = "Checkmate";
       this.elements.gameOverText.textContent = `${this.colorName(this.engine.winner)} wins the game.`;
+      return;
+    }
+    if (this.engine.gameState === STATE.RESIGN) {
+      this.elements.gameOverTitle.textContent = "Resignation";
+      this.elements.gameOverText.textContent = `${this.colorName(this.engine.winner)} wins by resignation.`;
       return;
     }
     if (this.engine.gameState === STATE.STALEMATE) {
@@ -891,11 +804,11 @@ export class ChessUI {
   }
 
   getEvaluationSnapshot() {
-    if (this.engine.gameState === STATE.CHECKMATE) {
+    if (this.engine.gameState === STATE.CHECKMATE || this.engine.gameState === STATE.RESIGN) {
       if (this.engine.winner === COLOR.WHITE) {
-        return { score: 10, label: "Mate - White wins" };
+        return { score: 10, label: this.engine.gameState === STATE.RESIGN ? "Resignation - White wins" : "Mate - White wins" };
       }
-      return { score: -10, label: "Mate - Black wins" };
+      return { score: -10, label: this.engine.gameState === STATE.RESIGN ? "Resignation - Black wins" : "Mate - Black wins" };
     }
     if (this.engine.gameState === STATE.STALEMATE) {
       return { score: 0, label: "Draw - Stalemate" };
@@ -920,35 +833,6 @@ export class ChessUI {
       score += this.engine.turn === COLOR.WHITE ? -1.5 : 1.5;
     }
     return { score, label: "" };
-  }
-
-  renderHistory() {
-    this.elements.historyList.innerHTML = "";
-    this.engine.moveHistory.forEach((move, index) => {
-      const li = document.createElement("li");
-      const turnNum = Math.floor(index / 2) + 1;
-      const prefix = index % 2 === 0 ? `${turnNum}.` : `${turnNum}...`;
-      const moveBtn = document.createElement("button");
-      moveBtn.type = "button";
-      moveBtn.className = "history-move-btn";
-      moveBtn.textContent = `${prefix} ${move.san || move.notation}`;
-      moveBtn.addEventListener("click", () => this.goToPly(index + 1));
-      li.appendChild(moveBtn);
-      this.elements.historyList.appendChild(li);
-    });
-    this.elements.historyList.scrollTop = this.elements.historyList.scrollHeight;
-  }
-
-  renderAnalysisPanel() {
-    if (!this.elements.analysisScrubber) {
-      return;
-    }
-    const max = Math.max(0, this.timelineSnapshots.length - 1);
-    this.elements.analysisScrubber.max = String(max);
-    this.elements.analysisScrubber.value = String(Math.min(this.currentPly, max));
-    this.drawEvalGraph();
-    this.renderReviewList();
-    this.renderSavedGames();
   }
 
   persistOngoingGame() {
@@ -1083,8 +967,7 @@ export class ChessUI {
           const latest = this.engine.moveHistory[this.engine.moveHistory.length - 1];
           const san = (latest?.san || latest?.notation || "").replace(/[+#]/g, "");
           if (san === token) {
-            this.timelineSnapshots.push(this.engine.getSnapshot());
-            this.currentPly = this.timelineSnapshots.length - 1;
+            this.history.push(this.engine.getSnapshot());
             return true;
           }
         }
@@ -1123,78 +1006,9 @@ export class ChessUI {
       if (!result.ok) {
         break;
       }
-      this.timelineSnapshots.push(this.engine.getSnapshot());
-      this.currentPly = this.timelineSnapshots.length - 1;
+      this.history.push(this.engine.getSnapshot());
     }
     this.render("Continued last saved game.");
-  }
-
-  drawEvalGraph() {
-    const canvas = this.elements.evalGraph;
-    if (!canvas) {
-      return;
-    }
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      return;
-    }
-    const width = canvas.width;
-    const height = canvas.height;
-    ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = "rgba(15,23,42,0.8)";
-    ctx.fillRect(0, 0, width, height);
-    ctx.strokeStyle = "rgba(148,163,184,0.4)";
-    ctx.beginPath();
-    ctx.moveTo(0, height / 2);
-    ctx.lineTo(width, height / 2);
-    ctx.stroke();
-
-    const points = [{ ply: 0, score: 0 }];
-    this.engine.moveHistory.forEach((move, index) => {
-      points.push({ ply: index + 1, score: Number(move.evalAfter ?? 0) });
-    });
-    if (points.length < 2) {
-      return;
-    }
-    const maxAbs = Math.max(1, ...points.map((p) => Math.min(10, Math.abs(p.score))));
-    ctx.strokeStyle = "#22d3ee";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    points.forEach((point, i) => {
-      const x = (point.ply / (points.length - 1)) * (width - 16) + 8;
-      const normalized = Math.max(-10, Math.min(10, point.score)) / maxAbs;
-      const y = (height / 2) - (normalized * (height / 2 - 12));
-      if (i === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
-    });
-    ctx.stroke();
-  }
-
-  renderReviewList() {
-    const list = this.elements.reviewList;
-    if (!list) {
-      return;
-    }
-    list.innerHTML = "";
-    this.engine.moveHistory.forEach((move, index) => {
-      if (!move.quality || move.quality === "Neutral") {
-        return;
-      }
-      const li = document.createElement("li");
-      const badge = document.createElement("span");
-      badge.className = "review-badge";
-      badge.textContent = move.badge || this.getQualityBadge(move.quality);
-      const turnNum = Math.floor(index / 2) + 1;
-      const better = (move.quality === "Blunder" || move.quality === "Mistake")
-        ? ` Better: ${move.bestMoveSan || move.bestMoveUci || "n/a"}`
-        : "";
-      li.textContent = `${turnNum}${index % 2 === 0 ? "." : "..."} ${move.san || move.notation} - ${move.quality}.${better}`;
-      li.prepend(badge);
-      list.appendChild(li);
-    });
   }
 
   getQualityBadge(label) {
@@ -1247,42 +1061,6 @@ export class ChessUI {
     return best;
   }
 
-  rebuildTimelineFromCurrent() {
-    this.timelineSnapshots = [this.engine.getSnapshot()];
-    this.currentPly = 0;
-    this.isViewingHistory = false;
-  }
-
-  goToPly(ply) {
-    if (this.timelineSnapshots.length === 0) {
-      return;
-    }
-    const clamped = Math.max(0, Math.min(ply, this.timelineSnapshots.length - 1));
-    const snapshot = this.timelineSnapshots[clamped];
-    if (!snapshot) {
-      return;
-    }
-    this.engine.restoreSnapshot(snapshot);
-    this.currentPly = clamped;
-    this.isViewingHistory = clamped !== this.timelineSnapshots.length - 1;
-    this.selected = null;
-    this.legalMoves = [];
-    this.stateStore.dispatch({ type: "UI/CLEAR_SELECTION" });
-    this.render(this.isViewingHistory ? `Viewing move ${clamped}.` : "Back to latest position.");
-  }
-
-  exitHistoryViewIfNeeded() {
-    if (!this.isViewingHistory) {
-      return;
-    }
-    const latest = this.timelineSnapshots[this.timelineSnapshots.length - 1];
-    if (latest) {
-      this.engine.restoreSnapshot(latest);
-    }
-    this.currentPly = this.timelineSnapshots.length - 1;
-    this.isViewingHistory = false;
-  }
-
   registerKeyboardShortcuts() {
     window.addEventListener("keydown", (event) => {
       const target = event.target;
@@ -1299,7 +1077,7 @@ export class ChessUI {
       if (key === "m") this.rematch();
       if (key === " ") {
         event.preventDefault();
-        this.togglePauseClock();
+        this.elements.pauseClockBtn.click();
       }
     });
   }
@@ -1324,109 +1102,6 @@ export class ChessUI {
         profile: this.progression ? { ...this.progression.profile } : null
       }
     });
-  }
-
-  renderBoard() {
-    const renderKey = this.getBoardRenderKey();
-    if (renderKey === this.lastBoardRenderKey) {
-      return;
-    }
-    this.lastBoardRenderKey = renderKey;
-    const boardEl = this.elements.board;
-    boardEl.innerHTML = "";
-    const checkSquare = this.getCheckKingSquare();
-    const rows = this.orientation === COLOR.WHITE ? [...Array(8).keys()] : [...Array(8).keys()].reverse();
-    const cols = this.orientation === COLOR.WHITE ? [...Array(8).keys()] : [...Array(8).keys()].reverse();
-    this.squareElements.clear();
-
-    for (const row of rows) {
-      for (const col of cols) {
-        const square = document.createElement("div");
-        square.className = `square ${(row + col) % 2 === 0 ? "white" : "black"}`;
-        square.dataset.row = String(row);
-        square.dataset.col = String(col);
-        square.setAttribute("role", "button");
-        square.setAttribute("tabindex", "0");
-        square.setAttribute("aria-label", `Square ${String.fromCharCode(97 + col)}${8 - row}`);
-
-        if (this.selected && this.selected.row === row && this.selected.col === col) {
-          square.classList.add("selected");
-        }
-
-        if (this.engine.lastMove) {
-          const { from, to, meta } = this.engine.lastMove;
-          if ((from.row === row && from.col === col) || (to.row === row && to.col === col)) {
-            square.classList.add("last-move");
-          }
-          if (to.row === row && to.col === col) {
-            square.classList.add("just-moved");
-            if (meta && meta.isCapture) {
-              square.classList.add("capture-hit");
-            }
-          }
-        }
-
-        const candidate = this.legalMoves.find((m) => m.row === row && m.col === col);
-        if (candidate) {
-          square.classList.add(candidate.isCapture ? "capture" : "move");
-        }
-
-        if (checkSquare && checkSquare.row === row && checkSquare.col === col) {
-          square.classList.add("in-check");
-        }
-
-        const piece = this.engine.getPiece(row, col, this.engine.board);
-        if (piece) {
-          const pieceNode = document.createElement("span");
-          pieceNode.className = `piece ${piece.color === COLOR.WHITE ? "light" : "dark"}`;
-          pieceNode.textContent = PIECE_ICONS[piece.color][piece.type];
-          square.appendChild(pieceNode);
-        }
-
-        const isBottomRank = this.orientation === COLOR.WHITE ? row === 7 : row === 0;
-        const isLeftFile = this.orientation === COLOR.WHITE ? col === 0 : col === 7;
-        if (isBottomRank) {
-          const fileLabel = document.createElement("span");
-          fileLabel.className = "coord file";
-          const displayFile = this.orientation === COLOR.WHITE ? col : 7 - col;
-          fileLabel.textContent = String.fromCharCode(97 + displayFile);
-          square.appendChild(fileLabel);
-        }
-        if (isLeftFile) {
-          const rankLabel = document.createElement("span");
-          rankLabel.className = "coord rank";
-          const displayRank = this.orientation === COLOR.WHITE ? 8 - row : row + 1;
-          rankLabel.textContent = String(displayRank);
-          square.appendChild(rankLabel);
-        }
-
-        square.addEventListener("click", () => this.handleSquareClick(row, col));
-        square.addEventListener("keydown", (event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            this.handleSquareClick(row, col);
-          }
-        });
-        boardEl.appendChild(square);
-        this.squareElements.set(`${row},${col}`, square);
-      }
-    }
-  }
-
-  getBoardRenderKey() {
-    const selected = this.selected ? `${this.selected.row},${this.selected.col}` : "-";
-    const legal = this.legalMoves.map((m) => `${m.row},${m.col}`).join("|");
-    const last = this.engine.lastMove
-      ? `${this.engine.lastMove.from.row},${this.engine.lastMove.from.col}:${this.engine.lastMove.to.row},${this.engine.lastMove.to.col}`
-      : "-";
-    return [
-      this.engine.serializeBoard(),
-      this.orientation,
-      selected,
-      legal,
-      last,
-      this.engine.gameState
-    ].join(";");
   }
 
   playSound(kind) {
@@ -1467,12 +1142,7 @@ export class ChessUI {
   }
 
   playStateSound() {
-    if (
-      this.engine.gameState === STATE.CHECKMATE
-      || this.engine.gameState === STATE.STALEMATE
-      || this.engine.gameState === STATE.DRAW
-      || this.engine.gameState === STATE.TIMEOUT
-    ) {
+    if (this.engine.isGameOver()) {
       this.playSound("breakdown");
       this.playSound("gameOver");
       return;
@@ -1491,15 +1161,15 @@ export class ChessUI {
     const materialDelta = movingSide === COLOR.WHITE ? materialDeltaRaw : -materialDeltaRaw;
 
     let label = "Neutral";
-    if (delta <= -1.8) {
+    if (delta <= EVAL_THRESHOLDS.BLUNDER) {
       label = "Blunder";
-    } else if (delta >= 1.2) {
+    } else if (delta >= EVAL_THRESHOLDS.GREAT) {
       label = "Great Move";
-    } else if (absolute >= 6) {
+    } else if (absolute >= EVAL_THRESHOLDS.WINNING) {
       label = "Winning Advantage";
-    } else if (delta >= 0.45) {
+    } else if (delta >= EVAL_THRESHOLDS.GOOD) {
       label = "Good Move";
-    } else if (delta <= -0.8) {
+    } else if (delta <= EVAL_THRESHOLDS.MISTAKE) {
       label = "Mistake";
     }
 
@@ -1512,34 +1182,6 @@ export class ChessUI {
       isHighValueCapture: Boolean(capturedPiece && (capturedPiece.type === "queen" || capturedPiece.type === "rook")),
       shouldMock: Boolean(moveMeta?.isCapture) && (delta <= -0.9 || materialDelta <= -2)
     };
-  }
-
-  applyMoveQualityEffects(assessment) {
-    if (!assessment) {
-      return;
-    }
-    if (assessment.label === "Blunder") {
-      this.elements.boardFrame.classList.remove("blunder-hit", "glitch-hit");
-      void this.elements.boardFrame.offsetWidth;
-      this.elements.boardFrame.classList.add("blunder-hit", "glitch-hit");
-      window.setTimeout(() => {
-        this.elements.boardFrame.classList.remove("blunder-hit", "glitch-hit");
-      }, 420);
-    }
-    if (assessment.isHighValueCapture) {
-      this.elements.boardFrame.classList.remove("blunder-hit");
-      void this.elements.boardFrame.offsetWidth;
-      this.elements.boardFrame.classList.add("blunder-hit");
-      window.setTimeout(() => this.elements.boardFrame.classList.remove("blunder-hit"), 240);
-    }
-    if (assessment.shouldMock) {
-      this.elements.boardFrame.classList.remove("glitch-hit");
-      void this.elements.boardFrame.offsetWidth;
-      this.elements.boardFrame.classList.add("glitch-hit");
-      window.setTimeout(() => {
-        this.elements.boardFrame.classList.remove("glitch-hit");
-      }, 320);
-    }
   }
 
   updateCriticalAtmosphere() {
@@ -1710,46 +1352,12 @@ export class ChessUI {
     this.pendingPromotion = null;
     this.closePromotionPrompt();
     const result = this.commitMove(context, type);
-    this.startClock();
+    this.clock.start();
     this.render(result.ok ? `Promoted to ${type}.` : result.reason);
     this.playStateSound();
   }
 
   oppositeColor(color) {
     return color === COLOR.WHITE ? COLOR.BLACK : COLOR.WHITE;
-  }
-
-  spawnCaptureParticles(row, col, capturedColor) {
-    const squareEl = this.squareElements.get(`${row},${col}`);
-    const layer = this.elements.particleLayer;
-    const frame = this.elements.boardFrame;
-    if (!squareEl || !layer || !frame) {
-      return;
-    }
-
-    const squareRect = squareEl.getBoundingClientRect();
-    const frameRect = frame.getBoundingClientRect();
-    const centerX = squareRect.left - frameRect.left + squareRect.width / 2;
-    const centerY = squareRect.top - frameRect.top + squareRect.height / 2;
-    const baseColor = capturedColor === COLOR.WHITE ? "#f8fafc" : "#111827";
-
-    for (let i = 0; i < 22; i += 1) {
-      const particle = document.createElement("span");
-      particle.className = "capture-particle";
-      const size = 3 + Math.random() * 5;
-      const drift = (Math.random() - 0.5) * 70;
-      const rise = -20 - Math.random() * 70;
-      const fall = 80 + Math.random() * 120;
-      particle.style.width = `${size}px`;
-      particle.style.height = `${size}px`;
-      particle.style.left = `${centerX}px`;
-      particle.style.top = `${centerY}px`;
-      particle.style.setProperty("--drift", `${drift}px`);
-      particle.style.setProperty("--rise", `${rise}px`);
-      particle.style.setProperty("--fall", `${fall}px`);
-      particle.style.background = baseColor;
-      layer.appendChild(particle);
-      window.setTimeout(() => particle.remove(), 900);
-    }
   }
 }
