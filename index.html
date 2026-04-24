@@ -7,16 +7,29 @@
   <link rel="stylesheet" href="./styles/main.css">
 </head>
 <body>
-  <section id="gameChooser" class="game-chooser">
+
+  <!-- ═══ STARTUP SPLASH ═════════════════════════════════════════════════════ -->
+  <div id="startupSplash" class="startup-splash" role="dialog" aria-label="TIA Game Hub — click to enter">
+    <div class="ss-content">
+      <div class="ss-logo-ring" aria-hidden="true">♛</div>
+      <div class="ss-divider"></div>
+      <h1 class="ss-title">TIA<br>Game Hub</h1>
+      <p class="ss-sub">Royal Board Games &middot; Est. MMXXV</p>
+      <div class="ss-divider"></div>
+      <p class="ss-hint">Click anywhere to enter</p>
+    </div>
+  </div>
+
+  <section id="gameChooser" class="game-chooser hidden">
     <div class="chooser-card">
-      <h1>Game Hub</h1>
-      <p>Choose your game mode.</p>
+      <h1>Royal Board Games</h1>
+      <p>Choose a mode and play locally on one screen.</p>
       <div class="chooser-actions">
         <button id="chooseChessBtn" type="button">Play Chess</button>
         <button id="chooseBackgammonBtn" type="button">Play Backgammon</button>
         <button id="chooseBlackjackBtn" type="button">Play Blackjack</button>
       </div>
-      <p class="chooser-note">Local, polished board games with quick switching and rich UX.</p>
+      <p class="chooser-note">Designed and maintained by Taha Ilter Akar · Student project with professional UX goals.</p>
     </div>
   </section>
 
@@ -333,73 +346,96 @@
     </section>
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!--  BLACKJACK                                                          -->
+    <!--  BLACKJACK / ROYAL 21                                              -->
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <section id="blackjackCard" class="game-card hidden">
       <header class="topbar">
-        <h1>Royal Blackjack</h1>
-        <p>Classic local Blackjack table - by Taha Ilter Akar</p>
+        <h1>Royal 21</h1>
+        <p>Six-Deck Blackjack · S17 · 3:2 Naturals — by Taha Ilter Akar</p>
       </header>
 
+      <!-- ── Felt Table ───────────────────────────────────────────────── -->
       <section class="bj-table" aria-label="Blackjack table">
+        <!-- Shoe visual (top-right anchor for deal animations) -->
         <div id="bjShoe" class="bj-shoe" aria-label="Card shoe">
           <div class="bj-shoe-deck-stack"></div>
           <div class="bj-shoe-body">
-            <span class="bj-shoe-label">Shoe</span>
-            <span id="bjShoeIndicator" class="bj-shoe-indicator">Fresh</span>
+            <span class="bj-shoe-label">SHOE</span>
+            <span id="bjShoeIndicator" class="bj-shoe-indicator">6 Decks</span>
           </div>
         </div>
 
+        <!-- Dealer zone -->
         <div class="bj-dealer-zone">
-          <div class="bj-zone-label">Dealer</div>
+          <div class="bj-zone-label">DEALER</div>
           <div id="bjDealerHand" class="bj-hand" aria-live="polite"></div>
-          <div id="bjDealerValue" class="bj-hand-value bj-hand-value-dealer"></div>
+          <div id="bjDealerValue" class="bj-hand-value-dealer"></div>
         </div>
 
-        <div class="bj-felt-arc"><span>BLACKJACK PAYS 3:2</span></div>
+        <!-- Felt inscription arc -->
+        <div class="bj-felt-arc" aria-hidden="true">
+          <span>BLACKJACK PAYS 3 TO 2 &nbsp;·&nbsp; DEALER STANDS ON ALL 17s</span>
+        </div>
 
+        <!-- Player zone -->
         <div class="bj-player-zone">
-          <div class="bj-zone-label">Player</div>
+          <div class="bj-zone-label">PLAYER</div>
           <div id="bjPlayerHandWrapper" class="bj-player-hand-wrapper" aria-live="polite"></div>
         </div>
 
+        <!-- Bet + balance (right side) -->
         <div class="bj-bet-zone">
-          <div class="bj-bet-label">Bet: <strong id="bjBetAmount">$0</strong></div>
-          <div id="bjChipsDisplay" class="bj-chips-display" aria-label="Bet chips"></div>
-          <div id="bjBalance" class="bj-balance">Balance: $1000</div>
+          <div class="bj-bet-label">BET</div>
+          <div id="bjChipsDisplay" class="bj-chips-display" aria-label="Stacked bet chips"></div>
+          <div class="bj-bet-amount-display"><span id="bjBetAmount">$0</span></div>
+          <div id="bjBalance" class="bj-balance">$1,000</div>
+          <div class="bj-balance-label">BALANCE</div>
         </div>
-
-        <div id="bjStatus" class="bj-status" aria-live="polite">Place your bet and deal to begin.</div>
-
-        <div id="bjBettingControls" class="bj-betting-controls">
-          <div id="bjChipSelector" class="bj-chip-selector" aria-label="Chip selector"></div>
-          <div class="bj-bet-actions">
-            <button id="bjClearBetBtn" type="button">Clear Bet</button>
-            <button id="bjDealBtn" type="button" class="bj-btn-primary">Deal</button>
-          </div>
-        </div>
-
-        <div id="bjActionControls" class="bj-action-controls bj-hidden">
-          <button id="bjHitBtn" type="button" class="bj-btn-action">Hit</button>
-          <button id="bjStandBtn" type="button" class="bj-btn-action">Stand</button>
-          <button id="bjDoubleBtn" type="button" class="bj-btn-action">Double</button>
-          <button id="bjSplitBtn" type="button" class="bj-btn-action">Split</button>
-        </div>
-
-        <div class="bj-nav-row">
-          <button id="bjNextRoundBtn" type="button">Next Round</button>
-          <button id="bjNewShoeBtn" type="button">New Shoe</button>
-          <button id="bjBackToChooserBtn" type="button">Back to Menu</button>
-        </div>
-
-        <section id="bjOutcomeOverlay" class="bj-outcome-overlay bj-hidden" aria-live="assertive">
-          <div class="bj-outcome-card">
-            <h3 id="bjOutcomeTitle" class="bj-outcome-title">Round Result</h3>
-            <p id="bjOutcomeDetail" class="bj-outcome-detail"></p>
-          </div>
-        </section>
-        <canvas id="bjConfettiCanvas" class="bj-confetti-canvas" aria-hidden="true"></canvas>
       </section>
+
+      <!-- ── Status bar (below table, above controls) ─────────────────── -->
+      <div id="bjStatus" class="bj-status" aria-live="polite">Place your bet to begin.</div>
+
+      <!-- ── Betting controls ─────────────────────────────────────────── -->
+      <div id="bjBettingControls" class="bj-betting-controls">
+        <div id="bjChipSelector" class="bj-chip-selector" aria-label="Choose chip denomination"></div>
+        <div class="bj-bet-actions">
+          <button id="bjClearBetBtn" type="button">Clear</button>
+          <button id="bjDealBtn" type="button" class="bj-btn-primary" disabled>Deal</button>
+        </div>
+      </div>
+
+      <!-- ── Player action controls (shown only on player turn) ───────── -->
+      <div id="bjActionControls" class="bj-action-controls bj-hidden">
+        <button id="bjHitBtn"   type="button" class="bj-btn-action">Hit</button>
+        <button id="bjStandBtn" type="button" class="bj-btn-action">Stand</button>
+        <button id="bjDoubleBtn" type="button" class="bj-btn-action">Double</button>
+        <button id="bjSplitBtn"  type="button" class="bj-btn-action" disabled>Split</button>
+      </div>
+
+      <!-- ── Nav row ──────────────────────────────────────────────────── -->
+      <div class="bj-nav-row">
+        <button id="bjNewShoeBtn" type="button">New Shoe</button>
+        <button id="bjBackToChooserBtn" type="button">⟵ Menu</button>
+      </div>
+
+      <!-- ── Challenges panel ─────────────────────────────────────────── -->
+      <div id="bjChallengesPanel" class="bj-challenges-panel" aria-label="Daily challenges"></div>
+
+      <!-- ── Outcome overlay — OUTSIDE the table so it isn't clipped ─── -->
+      <div id="bjOutcomeOverlay" class="bj-outcome-overlay bj-hidden" role="dialog" aria-live="assertive">
+        <!-- Confetti lives inside the overlay so it renders above the backdrop -->
+        <canvas id="bjConfettiCanvas" class="bj-confetti-canvas" aria-hidden="true"></canvas>
+        <div class="bj-outcome-card">
+          <div class="bj-outcome-streak" id="bjOutcomeStreak"></div>
+          <h2 id="bjOutcomeTitle" class="bj-outcome-title">Round Result</h2>
+          <p id="bjOutcomeDetail" class="bj-outcome-detail"></p>
+          <p id="bjOutcomeBonus" class="bj-outcome-bonus"></p>
+          <button id="bjNextRoundBtn" type="button" class="bj-btn-primary bj-btn-next-round">
+            Next Round ›
+          </button>
+        </div>
+      </div>
     </section>
 
   </main>

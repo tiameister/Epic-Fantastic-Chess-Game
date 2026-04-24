@@ -97,13 +97,45 @@ export class GameSound {
     });
   }
 
+  /**
+   * Percussive wood-on-wood impact when a piece is placed.
+   * @param {number} size - 0 (pawn/bishop) → 1 (king/queen) for pitch/resonance
+   */
+  woodHit(size = 0.4) {
+    const ctx = this.ensureContext();
+    if (!ctx || !this.nodes) return;
+
+    // Clamp size [0,1]
+    const s = Math.max(0, Math.min(1, size));
+    const baseFreq = 380 - s * 190; // 190 Hz (king) → 380 Hz (pawn)
+
+    // Attack transient — sharp high-freq click
+    this.playTone(baseFreq * 6.5, 0.018, 0.45, "sawtooth");
+    // Body resonance — hollow wooden thud
+    this.playTone(baseFreq, 0.055, 0.88, "triangle");
+    this.playTone(baseFreq * 0.5, 0.04, 0.55, "sine", 0.008);
+    // Subtle sustain decay
+    this.playTone(baseFreq * 1.4, 0.035, 0.28, "sine", 0.012);
+  }
+
+  /** Soft scraping whisper when lifting a piece off the board. */
+  piecePickup() {
+    const ctx = this.ensureContext();
+    if (!ctx || !this.nodes) return;
+
+    this.playTone(1050, 0.022, 0.22, "triangle");
+    this.playTone(760,  0.018, 0.14, "sine",     0.008);
+  }
+
   move() {
-    this.playChord([660, 990], 0.09, 0.7, "triangle");
+    this.woodHit(0.3);
+    this.playChord([660, 990], 0.09, 0.55, "triangle", 0.04);
   }
 
   capture() {
-    this.playChord([220, 330], 0.1, 1, "square");
-    this.playTone(170, 0.16, 0.8, "sawtooth", 0.03);
+    this.woodHit(0.5);
+    this.playChord([220, 330], 0.1, 0.9, "square",   0.02);
+    this.playTone(170, 0.16, 0.75, "sawtooth", 0.04);
     this.playMetalRiff();
   }
 

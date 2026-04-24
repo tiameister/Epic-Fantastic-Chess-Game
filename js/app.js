@@ -47,6 +47,9 @@ const elements = {
   bjBackToChooserBtn: document.getElementById("bjBackToChooserBtn"),
   bjNewShoeBtn: document.getElementById("bjNewShoeBtn"),
   bjConfettiCanvas: document.getElementById("bjConfettiCanvas"),
+  bjChallengesPanel: document.getElementById("bjChallengesPanel"),
+  bjOutcomeStreak: document.getElementById("bjOutcomeStreak"),
+  bjOutcomeBonus: document.getElementById("bjOutcomeBonus"),
   backgammonRollBtn: document.getElementById("backgammonRollBtn"),
   backgammonUndoBtn: document.getElementById("backgammonUndoBtn"),
   backgammonLangToggle: document.getElementById("backgammonLangToggle"),
@@ -217,3 +220,28 @@ if (elements.backToChooserBtn) elements.backToChooserBtn.addEventListener("click
 if (elements.bjBackToChooserBtn) elements.bjBackToChooserBtn.addEventListener("click", showChooser);
 
 showChooser();
+
+// ── Startup Splash ───────────────────────────────────────────────────────────
+(function initStartupSplash() {
+  const splash  = document.getElementById("startupSplash");
+  const chooser = elements.gameChooser;
+  if (!splash) {
+    // No splash element — reveal the chooser immediately.
+    chooser.classList.remove("hidden");
+    return;
+  }
+
+  function dismiss() {
+    if (splash.classList.contains("leaving")) return; // guard double-fire
+    splash.classList.add("leaving");
+    // Reveal game chooser as soon as the splash starts its exit animation.
+    chooser.classList.remove("hidden");
+    splash.addEventListener("animationend", () => splash.remove(), { once: true });
+    // Fallback: remove splash even if animationend never fires (e.g. prefers-reduced-motion).
+    setTimeout(() => splash.remove(), 1000);
+  }
+
+  // Click / tap anywhere to skip the intro; auto-dismiss after 2.8 s.
+  splash.addEventListener("click", dismiss, { once: true });
+  setTimeout(dismiss, 2800);
+}());

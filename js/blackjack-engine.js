@@ -56,6 +56,19 @@ export class BlackjackEngine {
     this.lastResults = [];     // [{ result, net, handIndex }]
     this.roundCount = 0;
 
+    // ── Stats (used by challenge system) ──────────────────────────────────
+    this.stats = {
+      wins: 0,
+      losses: 0,
+      pushes: 0,
+      blackjacks: 0,
+      doubleWins: 0,
+      currentStreak: 0,
+      bestStreak: 0,
+      handsInCurrentShoe: 0,  // wins counted in current shoe before reshuffle
+      lastWasDouble: false,   // flag so UI can credit doubleWins
+    };
+
     this.buildShoe();
   }
 
@@ -71,6 +84,7 @@ export class BlackjackEngine {
     // Cut card: when remaining cards drop below this threshold, flag reshuffle
     this.cutCardPos = Math.floor(this.shoe.length * (1 - this.cutPenetration));
     this.reshuffleNeeded = false;
+    this.stats.handsInCurrentShoe = 0;
   }
 
   _dealCard(faceDown = false) {
@@ -153,6 +167,7 @@ export class BlackjackEngine {
     } else if (playerBJ) {
       result = "blackjack";
       net = this.handBets[0] + Math.floor(this.handBets[0] * 1.5); // 3:2 payout
+      this.stats.blackjacks++;
     } else {
       result = "dealer_blackjack";
       net = 0;
@@ -160,6 +175,7 @@ export class BlackjackEngine {
 
     this.balance += net;
     this.lastResults = [{ result, net, handIndex: 0 }];
+    this._recordRoundStats(result === "blackjack", result === "blackjack");
     return { result, net };
   }
 
@@ -192,6 +208,7 @@ export class BlackjackEngine {
     const extraBet = Math.min(this.handBets[this.activeHandIndex], this.balance);
     this.balance -= extraBet;
     this.handBets[this.activeHandIndex] += extraBet;
+    this.stats.lastWasDouble = true;
 
     hand.push(this._dealCard());
     const busted = this.isBust(hand);
@@ -251,6 +268,8 @@ export class BlackjackEngine {
     const dealerBust = this.isBust(this.dealerHand);
     this.lastResults = [];
 
+    let roundWon = false;
+
     for (let i = 0; i < this.playerHands.length; i++) {
       const hand = this.playerHands[i];
       const bet = this.handBets[i];
@@ -277,8 +296,10 @@ export class BlackjackEngine {
 
       this.balance += net;
       this.lastResults.push({ result, net, bet, handIndex: i, playerVal, dealerVal });
+      if (result === "win") roundWon = true;
     }
 
+    this._recordRoundStats(roundWon, false);
     return { ok: true, results: this.lastResults };
   }
 
@@ -289,6 +310,27 @@ export class BlackjackEngine {
     this.playerHands = [[]];
     this.handBets = [0];
     this.activeHandIndex = 0;
+    this.stats.lastWasDouble = false;
+  }
+
+  _recordRoundStats(won, isBlackjack) {
+    this.stats.handsInCurrentShoe++;
+    if (won) {
+      this.stats.wins++;
+      this.stats.currentStreak++;
+      if (this.stats.currentStreak > this.stats.bestStreak) {
+        this.stats.bestStreak = this.stats.currentStreak;
+      }
+      if (this.stats.lastWasDouble) {
+        this.stats.doubleWins++;
+      }
+    } else if (this.lastResults.every(r => r.result === "push")) {
+      this.stats.pushes++;
+      // Push doesn't break streak
+    } else {
+      this.stats.losses++;
+      this.stats.currentStreak = 0;
+    }
   }
 
   // ─── Private Helpers ───────────────────────────────────────────────────────
@@ -384,6 +426,7 @@ export class BlackjackEngine {
       shoePenetration: this.shoePenetration,
       roundCount: this.roundCount,
       lastResults: this.lastResults,
+      stats: { ...this.stats },
     };
   }
 }

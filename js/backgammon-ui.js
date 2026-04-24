@@ -121,7 +121,12 @@ export class BackgammonUI {
   handlePointClick(from) {
     if (!this.active || this.engine.winner || this._isExecuting) return;
     if (this.engine.doubleOfferedBy) return;
-    if (this.engine.movesLeft.length === 0) return;
+
+    // No dice yet → clicking anywhere on the board triggers a roll.
+    if (this.engine.movesLeft.length === 0) {
+      this.rollDiceFromUI();
+      return;
+    }
 
     // Re-click selected piece → deselect
     if (this.selectedFrom === from) {
@@ -129,61 +134,50 @@ export class BackgammonUI {
       return;
     }
 
-    // A piece is already selected
+    // A destination is already highlighted — check if this is a valid landing.
     if (this.selectedFrom !== null && this._destinations) {
       const pathInfo = this._destinations.get(from);
-
       if (pathInfo) {
-        // Clicked a highlighted destination → execute the validated path
         this._executeDestination(from, pathInfo);
         return;
       }
-
-      // Clicked something else — try switching selection to another own checker
+      // Clicked another own checker → switch selection.
       if (this.hasSelectableChecker(from)) {
         this._selectChecker(from);
         return;
       }
-
-      // Clicked an invalid point while something was selected → deselect
+      // Clicked nowhere useful → deselect.
       this._deselect();
       return;
     }
 
-    // Nothing selected — try to select a checker at `from`
+    // Nothing selected — try to select a checker at `from`.
     if (!this.hasSelectableChecker(from)) {
       this._shakeFrom(from);
       return;
     }
-
     this._selectChecker(from);
   }
 
   /**
-   * Stage 1: Select a checker and compute all reachable destinations.
-   * Auto-executes immediately when there is exactly one legal destination.
+   * Stage 1 — Select a checker and compute all reachable destinations.
+   * Always shows highlights and waits for the player's second click;
+   * never auto-executes (even with a single destination) so the player
+   * always has clear visual confirmation before the piece moves.
    */
   _selectChecker(from) {
-    this.selectedFrom   = from;
-    this._destinations  = this.moveManager.getDestinations(from);
+    this.selectedFrom  = from;
+    this._destinations = this.moveManager.getDestinations(from);
 
     if (this._destinations.size === 0) {
-      // Should not happen (hasSelectableChecker guards this) but be defensive.
+      // Defensive: hasSelectableChecker should have caught this.
       this._shakeFrom(from);
       this._deselect();
       return;
     }
 
-    if (this._destinations.size === 1) {
-      // Exactly one legal landing — auto-execute, no second click needed.
-      const [dest, pathInfo] = [...this._destinations.entries()][0];
-      this._executeDestination(dest, pathInfo);
-      return;
-    }
-
-    // Multiple destinations → highlight them and wait for the second click.
     this.playCheckerSfx();
-    this.render();
+    this.render(); // show selection highlight + destination dots
   }
 
   /** Clear selection state and re-render. */
@@ -193,53 +187,53 @@ export class BackgammonUI {
     this.render();
   }
 
-  /** Stage 2: Execute the pre-validated path for the chosen destination. */
+  /** Stage 2 — Execute the pre-validated path for the chosen destination. */
   _executeDestination(dest, pathInfo) {
     void this._executePathWithAnimation(pathInfo.steps);
   }
 
   /**
-   * Execute a sequence of single-die engine moves with a brief animation
-   * pause between steps so multi-hop moves are visually transparent.
+   * Execute a sequence of single-die engine moves with a brief pause between
+   * steps so multi-hop (combined-dice) moves are visually transparent.
    *
-   * Each step delegates to engine.move() — the engine remains the authority.
-   * If a step is unexpectedly rejected the move is aborted and the selection
-   * is cleared.
+   * Uses try/finally to guarantee _isExecuting is always cleared, even if an
+   * unexpected exception occurs mid-animation.
    */
   async _executePathWithAnimation(steps) {
     this._isExecuting  = true;
     const originFrom   = steps[0].from;
-
-    // Clear selection before the first render so highlights disappear
     this.selectedFrom  = null;
     this._destinations = null;
 
-    for (let i = 0; i < steps.length; i++) {
-      const step   = steps[i];
-      const result = this.engine.move(step.from, step.to);
+    try {
+      for (let i = 0; i < steps.length; i++) {
+        const step   = steps[i];
+        const result = this.engine.move(step.from, step.to);
 
-      if (!result.ok) {
-        // Path pre-validation missed something — shake the origin and abort.
-        this._isExecuting = false;
-        this._shakeFrom(originFrom);
+        if (!result.ok) {
+          // Path pre-validation missed something — shake the origin and abort.
+          this._shakeFrom(originFrom);
+          this.render();
+          return;
+        }
+
+        this._pendingSnapTarget = typeof step.to === "number" ? step.to : null;
         this.render();
-        return;
-      }
+        this.playCheckerSfx();
 
-      // Queue the snap/land animation on the destination checker
-      this._pendingSnapTarget = typeof step.to === "number" ? step.to : null;
+        if (result.gameOver) break;
+
+        // Pause between steps so each intermediate landing is visible.
+        if (i < steps.length - 1) {
+          await new Promise(r => setTimeout(r, 230));
+        }
+      }
+    } catch (err) {
+      console.error("[BackgammonUI] move animation error:", err);
       this.render();
-      this.playCheckerSfx();
-
-      if (result.gameOver) break;
-
-      // Pause between steps so the intermediate landing is visible
-      if (i < steps.length - 1) {
-        await new Promise(r => setTimeout(r, 230));
-      }
+    } finally {
+      this._isExecuting = false;
     }
-
-    this._isExecuting = false;
   }
 
   /**
@@ -353,26 +347,6 @@ export class BackgammonUI {
 
   getPointLabel(index) {
     return String(index);
-  }
-
-  getMagneticDestination(selectedFrom, attemptedPoint) {
-    if (typeof selectedFrom !== "number" || typeof attemptedPoint !== "number") {
-      return null;
-    }
-    const legal = this.engine.getLegalMoves().filter((m) => m.from === selectedFrom);
-    if (legal.length === 0) return null;
-    let nearest = null;
-    let bestDistance = Infinity;
-    legal.forEach((m) => {
-      if (typeof m.to !== "number") return;
-      const d = Math.abs(m.to - attemptedPoint);
-      if (d < bestDistance) {
-        bestDistance = d;
-        nearest = m.to;
-      }
-    });
-    if (bestDistance <= 2) return nearest;
-    return null;
   }
 
   buildPoint(index, isTop) {
@@ -526,8 +500,8 @@ export class BackgammonUI {
     this.offSlotWhite = whiteSlot;
     this.offSlotBlack = blackSlot;
 
-    // Highlight bearing-off slots when "off" is a reachable destination.
-    const canOff = this._destinations?.has("off") || this.engine.canBearOff(this.engine.turn);
+    // Highlight bearing-off slots only when the selected checker can reach "off".
+    const canOff = Boolean(this._destinations?.has("off"));
     if (canOff) {
       whiteSlot.classList.add("legal-off");
       blackSlot.classList.add("legal-off");

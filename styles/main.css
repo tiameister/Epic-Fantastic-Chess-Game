@@ -103,32 +103,78 @@ body {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(2, 6, 23, 0.78);
-  z-index: 30;
+  padding: 24px;
+  background:
+    linear-gradient(160deg, rgba(2, 6, 23, 0.78), rgba(6, 10, 18, 0.82)),
+    url("./../images/background.jpeg") center / cover no-repeat fixed;
+  z-index: 10050;
+}
+
+.game-chooser::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(760px 420px at 12% 8%, rgba(96, 165, 250, 0.16), transparent 62%),
+    radial-gradient(720px 420px at 88% 12%, rgba(251, 191, 36, 0.12), transparent 62%);
+  pointer-events: none;
 }
 
 .chooser-card {
-  width: min(560px, 92%);
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 16px;
-  padding: 20px;
-  background: rgba(10, 16, 28, 0.94);
-  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.55);
+  position: relative;
+  z-index: 1;
+  width: min(740px, 96%);
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 18px;
+  padding: 24px 24px 18px;
+  background: linear-gradient(165deg, rgba(10, 16, 28, 0.94), rgba(7, 12, 22, 0.94));
+  box-shadow:
+    0 22px 48px rgba(2, 6, 23, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 }
 
 .chooser-card h1 {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
+  font-size: clamp(1.45rem, 2.4vw, 2rem);
+  letter-spacing: 0.25px;
+}
+
+.chooser-card > p {
+  margin: 0;
+  color: #cbd5e1;
+}
+
+.chooser-actions button {
+  flex: 1 1 0;
+  min-width: 170px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.95));
+  color: #e2e8f0;
+  padding: 12px 14px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.chooser-actions button:hover {
+  border-color: rgba(96, 165, 250, 0.72);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.28);
+  transform: translateY(-1px);
 }
 
 .chooser-actions {
   display: flex;
   gap: 10px;
-  margin: 12px 0;
+  margin: 14px 0 12px;
+  flex-wrap: wrap;
 }
 
 .chooser-note {
-  color: var(--muted);
+  color: #94a3b8;
   font-size: 0.86rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  margin-top: 6px;
+  padding-top: 10px;
 }
 
 .app-shell {
@@ -331,11 +377,42 @@ body {
 }
 
 .fancy-frame {
+  position: relative;
   padding: 12px;
   border-radius: 16px;
   background: var(--frame-bg);
   border: 1px solid var(--frame-border);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 20px var(--glow);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 20px var(--glow),
+    0 8px 32px rgba(0, 0, 0, 0.55);
+}
+
+/* Brass inlay inner ring */
+.fancy-frame::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Specular shimmer on the frame surface */
+.fancy-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.055) 0%,
+    transparent 45%,
+    rgba(251, 191, 36, 0.04) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
 }
 
 .board {
@@ -377,14 +454,26 @@ body[data-theme="obsidian"] .square.black {
   background: var(--black-square);
 }
 
+/* PBR-inspired chess pieces — layered specular + ground shadow + ambient */
 .piece.light {
   color: var(--piece-light);
-  text-shadow: 0 2px 4px rgba(15, 23, 42, 0.7);
+  text-shadow:
+    0 -1px 0 rgba(255, 255, 255, 0.9),
+    1px -1px 0 rgba(255, 250, 230, 0.55),
+    0 3px 6px rgba(10, 15, 30, 0.85),
+    0 1px 2px rgba(10, 15, 30, 0.95),
+    0 0 14px rgba(255, 240, 200, 0.1);
+  filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.52));
 }
 
 .piece.dark {
   color: var(--piece-dark);
-  text-shadow: 0 2px 3px rgba(248, 250, 252, 0.25);
+  text-shadow:
+    0 -1px 1px rgba(110, 75, 30, 0.5),
+    0 1px 0 rgba(0, 0, 0, 1),
+    0 3px 8px rgba(0, 0, 0, 0.9),
+    0 0 6px rgba(0, 0, 0, 0.5);
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.75));
 }
 
 .square.selected::before {
@@ -1381,6 +1470,156 @@ body.layout-training .training-panel {
 }
 
 /* ── Match-Start Splash ───────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════
+   GLOBAL STARTUP SPLASH — TIA GAME HUB
+   Full-screen cinematic intro shown once on page load.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.startup-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 99000; /* above game-chooser (10050) and all overlays */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 38%, rgba(110, 70, 10, 0.48), transparent),
+    radial-gradient(ellipse 42% 55% at 14% 82%, rgba(55, 12, 80, 0.32), transparent),
+    radial-gradient(ellipse 38% 45% at 88% 18%, rgba(8, 38, 72, 0.28), transparent),
+    #020814;
+  overflow: hidden;
+  cursor: pointer;
+  animation: ss-fade-in 0.55s ease forwards;
+}
+
+.startup-splash::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    138deg,
+    transparent 0%,
+    rgba(251, 191, 36, 0.05) 42%,
+    transparent 58%,
+    rgba(251, 191, 36, 0.03) 100%
+  );
+  pointer-events: none;
+}
+
+.startup-splash.leaving {
+  pointer-events: none;
+  animation: ss-fade-out 0.75s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.ss-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  z-index: 1;
+}
+
+.ss-logo-ring {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(251, 191, 36, 0.52);
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.16), transparent 68%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3.5rem;
+  line-height: 1;
+  box-shadow:
+    0 0 44px rgba(251, 191, 36, 0.24),
+    0 0 90px rgba(251, 191, 36, 0.09),
+    inset 0 0 22px rgba(251, 191, 36, 0.09);
+  animation: ss-logo-rise 0.95s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both;
+  user-select: none;
+}
+
+.ss-title {
+  font-family: "Cinzel", "Playfair Display", "Garamond", serif;
+  font-size: clamp(2.8rem, 9vw, 5.8rem);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0.18em;
+  text-align: center;
+  text-transform: uppercase;
+  background: linear-gradient(
+    158deg,
+    #b45309 0%,
+    #d97706 18%,
+    #fbbf24 38%,
+    #ffffff 52%,
+    #fbbf24 68%,
+    #f59e0b 84%,
+    #92400e 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 28px rgba(251, 191, 36, 0.55));
+  animation: ss-title-rise 0.88s cubic-bezier(0.34, 1.2, 0.64, 1) 0.35s both;
+  user-select: none;
+}
+
+.ss-sub {
+  font-size: clamp(0.72rem, 2vw, 0.92rem);
+  color: rgba(148, 163, 184, 0.68);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  animation: ss-title-rise 0.7s ease 0.6s both;
+  user-select: none;
+}
+
+.ss-divider {
+  width: min(300px, 72vw);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(251, 191, 36, 0.72), rgba(251, 191, 36, 0.28), transparent);
+  animation: ss-divider-expand 0.75s ease 0.68s both;
+}
+
+.ss-hint {
+  font-size: 0.7rem;
+  color: rgba(148, 163, 184, 0.32);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  animation: ss-hint-pulse 2.6s ease 1.5s both infinite;
+  user-select: none;
+}
+
+@keyframes ss-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes ss-fade-out {
+  0%   { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.055); }
+}
+
+@keyframes ss-logo-rise {
+  from { transform: scale(0.35) translateY(50px); opacity: 0; }
+  to   { transform: scale(1)    translateY(0);    opacity: 1; }
+}
+
+@keyframes ss-title-rise {
+  from { transform: translateY(28px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes ss-divider-expand {
+  from { transform: scaleX(0); opacity: 0; }
+  to   { transform: scaleX(1); opacity: 1; }
+}
+
+@keyframes ss-hint-pulse {
+  0%, 100% { opacity: 0.32; }
+  50%       { opacity: 0.78; }
+}
+
+/* ── Per-game match splash (shown when entering each game) ────────────────── */
 .game-splash {
   position: fixed;
   inset: 0;
@@ -2500,7 +2739,7 @@ body.layout-training .training-panel {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    BLACKJACK — ROYAL 21
-   Scoped entirely under #blackjackCard / .bj-* to avoid collisions.
+   All selectors scoped to #blackjackCard / .bj-* — zero collision risk.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Chooser button accent ───────────────────────────────────────────────── */
@@ -2532,7 +2771,7 @@ body.layout-training .training-panel {
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
-  min-height: 420px;
+  min-height: 380px;
   background:
     radial-gradient(ellipse at center, #1a4d2e 0%, #0f2d1a 60%, #07180d 100%);
   border: 6px solid #4a2c0a;
@@ -2547,7 +2786,7 @@ body.layout-training .training-panel {
   grid-template-columns: 1fr auto;
   gap: 0;
   padding: 1.5rem 2rem;
-  overflow: hidden;
+  /* NO overflow:hidden — that was clipping the outcome overlay */
 }
 
 /* Felt noise texture overlay */
@@ -2779,47 +3018,8 @@ body.layout-training .training-panel {
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 
-.bj-card--red .bj-card-front {
-  color: #c0392b;
-}
-
-.bj-card--black .bj-card-front {
-  color: #1a1a2e;
-}
-
-.bj-card-rank {
-  font-family: 'Georgia', serif;
-  font-weight: bold;
-  font-size: 0.8rem;
-  line-height: 1;
-}
-
-.bj-card-suit {
-  font-size: 0.75rem;
-  line-height: 1;
-}
-
-.bj-card-rank--tl { grid-area: tl-rank; }
-.bj-card-suit--tl  { grid-area: tl-suit; }
-.bj-card-suit--center {
-  grid-area: c;
-  font-size: 1.6rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-.bj-card-suit--br {
-  grid-area: br-suit;
-  transform: rotate(180deg);
-  display: block;
-}
-.bj-card-rank--br {
-  grid-area: br-rank;
-  transform: rotate(180deg);
-  display: block;
-  text-align: right;
-}
+.bj-card--red .bj-card-front   { color: #c0392b; }
+.bj-card--black .bj-card-front { color: #1a1a2e; }
 
 .bj-card-back {
   background: #1a3a6e;
@@ -2850,34 +3050,16 @@ body.layout-training .training-panel {
     );
 }
 
-/* ── Deal animation ──────────────────────────────────────────────────────── */
-@keyframes bj-deal-slide {
-  from {
-    transform: translate(var(--bj-deal-dx, 0px), var(--bj-deal-dy, -80px)) scale(0.65) rotate(-8deg);
-    filter: drop-shadow(0 20px 30px rgba(0, 0, 0, 0.9));
-    opacity: 0.4;
-  }
-  70% {
-    filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.6));
-  }
-  to {
-    transform: translate(0, 0) scale(1) rotate(0deg);
-    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.4));
-    opacity: 1;
-  }
-}
-
-.bj-card--dealing {
-  animation: bj-deal-slide 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
+/* deal animation is now defined in the "Card face spans" section below */
 
 /* ── Chips ───────────────────────────────────────────────────────────────── */
 .bj-chips-display {
   position: relative;
   width: 56px;
-  min-height: 56px;
+  min-height: 64px;
 }
 
+/* Base chip — used for both selector chips and stacked bet chips */
 .bj-chip {
   width: 52px;
   height: 52px;
@@ -2885,69 +3067,40 @@ body.layout-training .training-panel {
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
   box-shadow:
-    0 3px 0 rgba(0, 0, 0, 0.4),
+    0 3px 0 rgba(0, 0, 0, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     inset 0 -2px 0 rgba(0, 0, 0, 0.2);
-  border: 3px dashed rgba(255, 255, 255, 0.25);
-  cursor: pointer;
+  border: 3px dashed rgba(255, 255, 255, 0.28);
   user-select: none;
-  transition: transform 0.1s, box-shadow 0.1s;
+  flex-shrink: 0;
 }
 
-.bj-chip:hover:not(:disabled) {
-  transform: translateY(-2px);
+/* Selector chips — row layout, interactive */
+.bj-chip--selector {
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  /* Override any absolute positioning inherited below */
+  position: relative !important;
+  bottom: auto !important;
+}
+.bj-chip--selector:hover:not(:disabled) {
+  transform: translateY(-3px);
   box-shadow:
-    0 6px 0 rgba(0, 0, 0, 0.4),
+    0 7px 0 rgba(0, 0, 0, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     inset 0 -2px 0 rgba(0, 0, 0, 0.2);
 }
-.bj-chip:active:not(:disabled) {
-  transform: translateY(1px);
-}
+.bj-chip--selector:active:not(:disabled) { transform: translateY(1px); }
+.bj-chip--selector:disabled { opacity: 0.32; cursor: not-allowed; }
 
-/* Stack chips in display area */
+/* Stacked bet chips */
 .bj-chips-display .bj-chip {
   position: absolute;
-  bottom: var(--bj-chip-offset, 0px);
+  bottom: var(--off, 0px);
   left: 0;
+  pointer-events: none;
   cursor: default;
-  pointer-events: none;
-  width: 52px;
-  height: 52px;
-}
-
-/* Selector chips */
-.bj-chip-btn {
-  all: unset;
-}
-
-.bj-chip-selector .bj-chip-btn {
-  display: inline-flex;
-}
-
-.bj-chip-selector .bj-chip-btn.bj-chip {
-  cursor: pointer;
-}
-
-.bj-chip-label {
-  font-size: 0.55rem;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.9);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  letter-spacing: 0.04em;
-  pointer-events: none;
-}
-
-/* Denominations */
-.bj-chip--red    { background: radial-gradient(circle at 35% 35%, #e55, #b22); }
-.bj-chip--blue   { background: radial-gradient(circle at 35% 35%, #4af, #147); }
-.bj-chip--green  { background: radial-gradient(circle at 35% 35%, #5c5, #262); }
-.bj-chip--purple { background: radial-gradient(circle at 35% 35%, #a6e, #528); }
-.bj-chip--black  {
-  background: radial-gradient(circle at 35% 35%, #555, #111);
-  border-color: rgba(212, 175, 55, 0.5);
 }
 
 /* Ghost chip for flight animation */
@@ -2955,34 +3108,76 @@ body.layout-training .training-panel {
   position: fixed;
   z-index: 9999;
   pointer-events: none;
-  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease;
+  transition: transform 0.36s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.36s ease;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* ── Bet / Balance display ────────────────────────────────────────────────── */
+.bj-chip-label {
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+/* Chip denominations */
+.bj-chip--red    { background: radial-gradient(circle at 35% 35%, #e55, #b22); }
+.bj-chip--blue   { background: radial-gradient(circle at 35% 35%, #4af, #147); }
+.bj-chip--green  { background: radial-gradient(circle at 35% 35%, #5c5, #262); }
+.bj-chip--purple { background: radial-gradient(circle at 35% 35%, #a6e, #528); }
+.bj-chip--black  {
+  background: radial-gradient(circle at 35% 35%, #555, #111);
+  border-color: rgba(212, 175, 55, 0.55);
+}
+
+/* ── Bet zone elements ───────────────────────────────────────────────────── */
 .bj-bet-label {
-  font-size: 0.65rem;
-  color: #d4af37;
-  letter-spacing: 0.08em;
+  font-size: 0.5rem;
+  color: rgba(212, 175, 55, 0.6);
+  letter-spacing: 0.2em;
   text-align: center;
   text-transform: uppercase;
 }
 
-.bj-balance {
-  font-size: 0.65rem;
-  color: #8fbc8f;
-  letter-spacing: 0.05em;
+.bj-bet-amount-display {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #d4af37;
   text-align: center;
+  letter-spacing: 0.04em;
 }
 
-/* ── Status line ─────────────────────────────────────────────────────────── */
+.bj-balance {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #8fbc8f;
+  text-align: center;
+  letter-spacing: 0.03em;
+}
+
+.bj-balance-label {
+  font-size: 0.5rem;
+  color: rgba(143, 188, 143, 0.5);
+  letter-spacing: 0.2em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* ── Status bar ──────────────────────────────────────────────────────────── */
 .bj-status {
   text-align: center;
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   color: #d4af37;
-  letter-spacing: 0.08em;
-  padding: 0.25rem 1rem;
-  min-height: 1.4em;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.06em;
+  padding: 0.4rem 1rem;
+  min-height: 1.5em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 
 /* ── Controls layout ─────────────────────────────────────────────────────── */
@@ -2990,43 +3185,43 @@ body.layout-training .training-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 1rem;
+  gap: 0.6rem;
+  padding: 0.4rem 1rem 0.25rem;
 }
 
 .bj-chip-selector {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.65rem;
   justify-content: center;
 }
 
 .bj-bet-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.6rem;
 }
 
 .bj-action-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.65rem;
   justify-content: center;
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 1rem 0.25rem;
 }
 
 .bj-nav-row {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.6rem;
   justify-content: center;
-  padding: 0.25rem 1rem 0.5rem;
+  padding: 0.2rem 1rem 0.4rem;
 }
 
-/* ── Button styles ───────────────────────────────────────────────────────── */
+/* ── Button base ─────────────────────────────────────────────────────────── */
 #blackjackCard button {
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   letter-spacing: 0.06em;
-  padding: 0.5rem 1.1rem;
+  padding: 0.45rem 1rem;
   border-radius: 6px;
   border: 1px solid rgba(212, 175, 55, 0.3);
   background: rgba(255, 255, 255, 0.06);
@@ -3035,20 +3230,12 @@ body.layout-training .training-panel {
   transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
   text-transform: uppercase;
 }
-
 #blackjackCard button:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.18);
 }
-
-#blackjackCard button:active:not(:disabled) {
-  transform: translateY(1px);
-}
-
-#blackjackCard button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
+#blackjackCard button:active:not(:disabled) { transform: translateY(1px); }
+#blackjackCard button:disabled { opacity: 0.32; cursor: not-allowed; }
 
 .bj-btn-primary {
   background: linear-gradient(135deg, #1a472a, #2d6a4f) !important;
@@ -3056,37 +3243,47 @@ body.layout-training .training-panel {
   color: #f5e6c8 !important;
   font-weight: 700;
 }
-
 .bj-btn-primary:hover:not(:disabled) {
   background: linear-gradient(135deg, #2d6a4f, #3d8b67) !important;
-  box-shadow: 0 0 16px rgba(212, 175, 55, 0.4) !important;
+  box-shadow: 0 0 18px rgba(212, 175, 55, 0.45) !important;
 }
 
 .bj-btn-action {
-  background: rgba(212, 175, 55, 0.1) !important;
-  border-color: rgba(212, 175, 55, 0.5) !important;
+  background: rgba(212, 175, 55, 0.08) !important;
+  border-color: rgba(212, 175, 55, 0.45) !important;
   font-weight: 600;
-  min-width: 90px;
+  min-width: 88px;
 }
-
 .bj-btn-action:hover:not(:disabled) {
-  background: rgba(212, 175, 55, 0.2) !important;
+  background: rgba(212, 175, 55, 0.18) !important;
 }
 
-/* ── Outcome overlay ──────────────────────────────────────────────────────── */
+.bj-btn-next-round {
+  margin-top: 0.5rem;
+  font-size: 1rem !important;
+  padding: 0.65rem 2rem !important;
+  letter-spacing: 0.1em !important;
+  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.3) !important;
+}
+.bj-btn-next-round:hover:not(:disabled) {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 28px rgba(212, 175, 55, 0.5) !important;
+}
+
+/* ── Outcome overlay — covers #blackjackCard (position: relative) ────────── */
 .bj-outcome-overlay {
   position: absolute;
   inset: 0;
-  z-index: 50;
+  z-index: 200;  /* well above table and all controls */
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
-  border-radius: inherit;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
   opacity: 0;
-  transition: opacity 0.35s ease;
+  transition: opacity 0.32s ease;
   pointer-events: none;
+  border-radius: 0;  /* covers the full section, no rounding */
 }
 
 .bj-outcome-overlay.bj-outcome--visible {
@@ -3095,62 +3292,223 @@ body.layout-training .training-panel {
 }
 
 .bj-outcome-card {
-  background: linear-gradient(160deg, #1a1a1a 0%, #0d1a0d 100%);
+  position: relative;
+  z-index: 1;  /* above confetti canvas */
+  background: linear-gradient(160deg, #1c1c1c 0%, #0b180b 100%);
   border: 2px solid #d4af37;
-  border-radius: 16px;
-  padding: 2rem 3rem;
+  border-radius: 18px;
+  padding: 2.2rem 3rem 1.8rem;
   text-align: center;
   box-shadow:
-    0 0 0 1px rgba(212, 175, 55, 0.2),
-    0 30px 60px rgba(0, 0, 0, 0.8),
-    0 0 40px rgba(212, 175, 55, 0.15);
-  transform: scale(0.85);
-  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    0 0 0 1px rgba(212, 175, 55, 0.18),
+    0 32px 64px rgba(0, 0, 0, 0.85),
+    0 0 50px rgba(212, 175, 55, 0.12);
+  transform: scale(0.82) translateY(12px);
+  transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-width: 420px;
+  width: 90vw;
 }
 
 .bj-outcome--visible .bj-outcome-card {
-  transform: scale(1);
+  transform: scale(1) translateY(0);
 }
+
+.bj-outcome-streak {
+  font-size: 0.8rem;
+  color: #d4af37;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.4rem;
+  min-height: 1.2em;
+}
+.bj-outcome-streak--hot { color: #ff9800; text-shadow: 0 0 8px rgba(255, 152, 0, 0.6); }
 
 .bj-outcome-title {
   font-family: 'Georgia', serif;
   font-size: 2rem;
-  letter-spacing: 0.12em;
-  margin: 0 0 0.5rem;
-  text-shadow: 0 0 20px currentColor;
+  letter-spacing: 0.1em;
+  margin: 0 0 0.4rem;
+  text-shadow: 0 0 24px currentColor;
+  line-height: 1.1;
 }
 
-.bj-outcome--win .bj-outcome-title    { color: #d4af37; }
-.bj-outcome--lose .bj-outcome-title   { color: #e55; }
-.bj-outcome--push .bj-outcome-title   { color: #aaa; }
-.bj-outcome--blackjack .bj-outcome-title { color: #ffe066; }
+.bj-outcome--win .bj-outcome-title       { color: #d4af37; }
+.bj-outcome--lose .bj-outcome-title      { color: #e55; }
+.bj-outcome--push .bj-outcome-title      { color: #999; }
+.bj-outcome--blackjack .bj-outcome-title { color: #ffe066; text-shadow: 0 0 30px rgba(255, 224, 102, 0.8); }
+.bj-outcome--bankrupt .bj-outcome-title  { color: #e55; }
 
 .bj-outcome-detail {
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   color: #f5e6c8;
-  margin: 0 0 1.5rem;
-  letter-spacing: 0.06em;
+  margin: 0 0 0.75rem;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
 }
 
-/* ── Confetti canvas ──────────────────────────────────────────────────────── */
+.bj-outcome-bonus {
+  margin: 0 0 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+}
+
+.bj-bonus-tag {
+  display: inline-block;
+  background: rgba(212, 175, 55, 0.15);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  border-radius: 20px;
+  padding: 0.15rem 0.65rem;
+  font-size: 0.72rem;
+  color: #d4af37;
+  letter-spacing: 0.05em;
+}
+
+/* ── Confetti canvas — inside the overlay, covers it ────────────────────── */
 .bj-confetti-canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 45;
-  border-radius: inherit;
+  z-index: 0;  /* behind the card (z-index: 1) */
+}
+
+/* ── Card face spans (new short class names) ─────────────────────────────── */
+.bj-cr { font-family: 'Georgia', serif; font-weight: bold; font-size: 0.8rem; line-height: 1; }
+.bj-cs { font-size: 0.75rem; line-height: 1; }
+.bj-cr--tl { grid-area: tl-rank; }
+.bj-cs--tl { grid-area: tl-suit; }
+.bj-cs--c  {
+  grid-area: c;
+  font-size: 1.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.bj-cs--br { grid-area: br-suit; transform: rotate(180deg); display: block; }
+.bj-cr--br { grid-area: br-rank; transform: rotate(180deg); display: block; text-align: right; }
+
+/* ── Challenges panel ────────────────────────────────────────────────────── */
+.bj-challenges-panel {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 0.5rem 0.25rem;
+}
+
+.bj-ch-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.5rem;
+  margin-bottom: 0.35rem;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.15);
+}
+
+.bj-ch-title {
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  color: rgba(212, 175, 55, 0.65);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.bj-ch-streak {
+  font-size: 0.65rem;
+  color: #8fbc8f;
+  letter-spacing: 0.04em;
+}
+.bj-ch-streak--hot { color: #ff9800; }
+
+.bj-ch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.bj-ch-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(212, 175, 55, 0.1);
+  transition: border-color 0.2s;
+}
+
+.bj-ch-done {
+  border-color: rgba(212, 175, 55, 0.35);
+  background: rgba(212, 175, 55, 0.06);
+}
+
+.bj-ch-icon {
+  font-size: 0.75rem;
+  color: rgba(212, 175, 55, 0.5);
+  flex-shrink: 0;
+  width: 14px;
+}
+.bj-ch-done .bj-ch-icon { color: #d4af37; }
+
+.bj-ch-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.bj-ch-name {
+  font-size: 0.68rem;
+  color: #f5e6c8;
+  letter-spacing: 0.02em;
+}
+.bj-ch-done .bj-ch-name { color: #d4af37; }
+
+.bj-ch-desc {
+  font-size: 0.6rem;
+  color: rgba(245, 230, 200, 0.5);
+  letter-spacing: 0.02em;
+}
+
+.bj-ch-prog {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.bj-ch-bar {
+  width: 60px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.bj-ch-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1a472a, #d4af37);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+.bj-ch-done .bj-ch-fill { background: #d4af37; }
+
+.bj-ch-count {
+  font-size: 0.58rem;
+  color: rgba(245, 230, 200, 0.5);
+  letter-spacing: 0.04em;
 }
 
 /* ── Utility ──────────────────────────────────────────────────────────────── */
-.bj-hidden {
-  display: none !important;
-}
+.bj-hidden { display: none !important; }
 
 @keyframes bj-pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  50%       { opacity: 0.4; }
 }
 
 @keyframes bj-shake {
@@ -3160,43 +3518,32 @@ body.layout-training .training-panel {
   60%       { transform: translateX(-4px); }
   80%       { transform: translateX(4px); }
 }
+.bj-shake { animation: bj-shake 0.45s ease; }
 
-.bj-shake {
-  animation: bj-shake 0.45s ease;
+/* ── Deal animation (uses --bj-dx / --bj-dy set by JS) ─────────────────── */
+@keyframes bj-deal {
+  from {
+    transform: translate(var(--bj-dx, 0px), var(--bj-dy, -80px)) scale(0.62) rotate(-9deg);
+    filter: drop-shadow(0 22px 32px rgba(0, 0, 0, 0.9));
+    opacity: 0.35;
+  }
+  65% { filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.6)); }
+  to {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.4));
+    opacity: 1;
+  }
 }
+.bj-card--dealing { animation: bj-deal 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 
-/* ── Responsive ───────────────────────────────────────────────────────────── */
+/* ── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 680px) {
-  .bj-table {
-    border-radius: 60px / 30px;
-    padding: 1rem;
-    min-height: 340px;
-  }
-
-  .bj-card {
-    width: 50px;
-    height: 76px;
-  }
-
-  .bj-card-suit--center {
-    font-size: 1.1rem;
-  }
-
-  .bj-chip {
-    width: 40px;
-    height: 40px;
-  }
-
-  .bj-chips-display .bj-chip {
-    width: 40px;
-    height: 40px;
-  }
-
-  .bj-outcome-card {
-    padding: 1.5rem 1.5rem;
-  }
-
-  .bj-outcome-title {
-    font-size: 1.4rem;
-  }
+  .bj-table { border-radius: 60px / 30px; padding: 1rem; min-height: 300px; }
+  .bj-card  { width: 50px; height: 76px; }
+  .bj-cs--c { font-size: 1.1rem; }
+  .bj-chip  { width: 44px; height: 44px; }
+  .bj-chips-display .bj-chip { width: 44px; height: 44px; }
+  .bj-outcome-card { padding: 1.5rem 1.2rem 1.3rem; }
+  .bj-outcome-title { font-size: 1.5rem; }
+  .bj-ch-bar { width: 44px; }
 }

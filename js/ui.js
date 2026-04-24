@@ -509,6 +509,7 @@ export class ChessUI {
   }
 
   select(row, col) {
+    this.playSound("piecePickup");
     this.selected = { row, col };
     this.legalMoves = this.engine.getLegalMoves(row, col);
     this.stateStore.dispatch({

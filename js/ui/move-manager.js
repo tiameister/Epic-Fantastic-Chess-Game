@@ -1,26 +1,26 @@
 /**
- * MoveManager — Centralised pathfinding and validated-intent system.
+ * MoveManager — Centralised pathfinding for the Backgammon UI.
  *
- * Computes every destination reachable from a selected checker using
- * any valid combination of available dice, then validates each candidate
- * path against the engine's own legality filter so that rule constraints
- * (max-dice usage, higher-die preference) are always respected.
+ * Computes every destination reachable from a selected checker using any
+ * legal combination of available dice.
  *
- * The engine remains the ONLY mutation point; MoveManager is pure read.
+ * Design principle:
+ *   Step 1  — Engine authority: only first moves returned by
+ *             engine.getLegalMoves() are used as starting points.  This
+ *             automatically enforces all standard rules: bar-entry priority,
+ *             max-dice-usage constraint, higher-die-first preference.
  *
- * ─── Public API ──────────────────────────────────────────────────────────
+ *   Step 2+ — Free extension: subsequent steps use engine.getAllSingleMoves()
+ *             on the simulated post-first-move state, without re-running the
+ *             expensive max-depth filter on every intermediate position.
  *
+ * Public API:
  *   mm.getDestinations(from)
  *     → Map<destination, PathInfo>
  *
  *     destination : number (board point) | "off"
  *     PathInfo    : { steps: Step[], isCombined: boolean }
  *     Step        : { from: number|"bar", to: number|"off", die: number }
- *
- *   mm.findPathTo(from, dest)
- *     → PathInfo | null
- *
- * ─────────────────────────────────────────────────────────────────────────
  */
 export class MoveManager {
   constructor(engine) {
@@ -29,115 +29,115 @@ export class MoveManager {
 
   /**
    * Returns every board point (and "off") reachable from `from` using any
-   * valid single-die or combined-dice move.
+   * valid single-die or multi-die combination.
    *
-   * Only destinations whose FIRST step is sanctioned by engine.getLegalMoves()
-   * are included, ensuring all standard backgammon rules are honoured without
-   * duplicating the engine's max-movable / higher-die logic here.
+   * Combined paths (isCombined: true) take priority over single-die paths
+   * when both reach the same destination.
    */
   getDestinations(from) {
     const engine = this._engine;
     const player = engine.turn;
-    const state  = this._snap();
-    const dice   = [...engine.movesLeft];
 
-    // Recursively explore every reachable point.
-    const allPaths = new Map(); // destination → Path[]
-    this._explore(from, state, dice, player, [], allPaths);
+    // Engine-validated first moves — respects all standard Backgammon rules.
+    const legalFirst = engine.getLegalMoves().filter(m => m.from === from);
+    if (legalFirst.length === 0) return new Map();
 
-    // Ask the engine which first steps are legally sanctioned.
-    const legalFirst     = engine.getLegalMoves().filter(m => m.from === from);
-    const legalFirstDest = new Set(legalFirst.map(m => m.to));
+    const result   = new Map();
+    const baseState = this._snap();
+    const fullDice  = [...engine.movesLeft];
 
-    const result = new Map();
+    // Deduplicate by (from, to, die) so that identical dice slots (e.g. [4,4,4,4])
+    // don't repeat the same exploration branch four times.
+    const seenFirst = new Set();
+    for (const m1 of legalFirst) {
+      const key = `${m1.from}|${m1.to}|${m1.die}`;
+      if (seenFirst.has(key)) continue;
+      seenFirst.add(key);
 
-    for (const [dest, paths] of allPaths) {
-      // A path is valid only if its first intermediate stop (or the destination
-      // itself for a single-die move) is in the engine's legal-move set.
-      const valid = paths.filter(p => legalFirstDest.has(p.steps[0].to));
-      if (!valid.length) continue;
+      // Record the single-die destination (unless a combined path already exists).
+      if (!result.has(m1.to)) {
+        result.set(m1.to, {
+          steps: [{ from: m1.from, to: m1.to, die: m1.die }],
+          isCombined: false,
+        });
+      }
 
-      // Among valid paths prefer the one using the most dice (greedy).
-      const best = valid.reduce((a, b) =>
-        b.steps.length > a.steps.length ? b : a
-      );
+      if (m1.to === "off") continue; // bear-off ends the checker's journey
 
-      result.set(dest, { steps: best.steps, isCombined: best.steps.length > 1 });
+      // Simulate the board after this first move and explore further dice.
+      const stateAfterFirst = engine.applyMoveToState(baseState, m1, player);
+      const diceAfterFirst  = fullDice.filter((_, i) => i !== m1.idx);
+
+      if (diceAfterFirst.length > 0) {
+        this._extend(
+          [{ from: m1.from, to: m1.to, die: m1.die }],
+          m1.to,
+          stateAfterFirst,
+          diceAfterFirst,
+          engine,
+          player,
+          result,
+        );
+      }
     }
 
     return result;
   }
 
-  /** Shorthand: find PathInfo for one specific destination, or null. */
-  findPathTo(from, dest) {
-    return this.getDestinations(from).get(dest) ?? null;
-  }
-
-  // ─── Private ──────────────────────────────────────────────────────────
+  // ─── Private ──────────────────────────────────────────────────────────────
 
   /**
-   * Recursive DFS over the board.  For every die value (deduped to avoid
-   * redundant branches on doubles) compute the landing point, validate
-   * accessibility, record the path, then recurse from the intermediate stop.
+   * Recursively extend a path by trying each remaining die from the
+   * intermediate position `from` on the simulated `state`.
+   *
+   * @param {Step[]}  pathSoFar  - moves committed so far (including first step)
+   * @param {*}       from       - current checker position (number | "bar")
+   * @param {object}  state      - simulated board state after pathSoFar
+   * @param {number[]} diceLeft  - remaining dice values to try
    */
-  _explore(from, state, dice, player, stepsSoFar, result) {
+  _extend(pathSoFar, from, state, diceLeft, engine, player, result) {
     const tried = new Set();
 
-    for (let i = 0; i < dice.length; i++) {
-      const die = dice[i];
-      if (tried.has(die)) continue; // dedupe identical dice values
+    for (let i = 0; i < diceLeft.length; i++) {
+      const die = diceLeft[i];
+      if (tried.has(die)) continue; // skip duplicate values (e.g. doubles)
       tried.add(die);
 
-      const { to, isBearOff } = this._computeDest(from, die, player, state);
-      if (to === null) continue;
+      // getAllSingleMoves handles bar-entry and bear-off rules correctly for
+      // the simulated state without the costly max-depth filter.
+      const moves = engine
+        .getAllSingleMoves(state, [die], player)
+        .filter(m => m.from === from);
 
-      const step     = { from, to, die };
-      const newSteps = [...stepsSoFar, step];
+      for (const m of moves) {
+        const newPath = [
+          ...pathSoFar,
+          { from: m.from, to: m.to, die: m.die },
+        ];
+        const dest = m.to;
 
-      if (!result.has(to)) result.set(to, []);
-      result.get(to).push({ steps: newSteps });
+        // Combined (multi-die) paths override single-die paths to the same dest.
+        if (!result.has(dest) || !result.get(dest).isCombined) {
+          result.set(dest, { steps: newPath, isCombined: true });
+        }
 
-      // Continue from the intermediate point (bear-offs don't continue).
-      if (!isBearOff && dice.length > 1) {
-        const nextState = this._engine.applyMoveToState(
-          state, { from, to, die, idx: i }, player
-        );
-        const nextDice = dice.filter((_, k) => k !== i);
-        this._explore(to, nextState, nextDice, player, newSteps, result);
+        if (dest === "off") continue; // bear-off terminates this branch
+
+        // Recurse if there are still dice to use from the new position.
+        if (diceLeft.length > 1) {
+          const nextState = engine.applyMoveToState(
+            state,
+            { from: m.from, to: m.to, die, idx: 0 },
+            player,
+          );
+          const nextDice = diceLeft.filter((_, k) => k !== i);
+          this._extend(newPath, dest, nextState, nextDice, engine, player, result);
+        }
       }
     }
   }
 
-  /**
-   * Compute where a single die lands from `from`, respecting board boundaries
-   * and bear-off eligibility.  Returns { to, isBearOff } or { to: null } if
-   * the destination is blocked or illegal.
-   */
-  _computeDest(from, die, player, state) {
-    const e = this._engine;
-
-    if (from === "bar") {
-      const to = e.entryPoint(die, player);
-      return e.isOpenFor(to, player, state)
-        ? { to, isBearOff: false }
-        : { to: null };
-    }
-
-    const raw = e.destination(from, die, player);
-
-    if (raw >= 1 && raw <= 24) {
-      return e.isOpenFor(raw, player, state)
-        ? { to: raw, isBearOff: false }
-        : { to: null };
-    }
-
-    // Out of board range — potentially a bear-off.
-    return e.isHigherBearOffAllowed(from, die, player, state)
-      ? { to: "off", isBearOff: true }
-      : { to: null };
-  }
-
-  /** Snapshot the engine's board state without mutating it. */
+  /** Snapshot the live engine state without mutating it. */
   _snap() {
     return {
       points: [...this._engine.points],
