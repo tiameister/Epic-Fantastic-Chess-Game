@@ -49,6 +49,10 @@ export class BackgammonUI {
       this.engine.setDoublingEnabled(this.elements.backgammonDoublingToggle.checked);
       this.render();
     });
+    this.elements.backgammonCheatWhiteToggle.addEventListener("change", () => {
+      this.engine.setWhiteCheatMode(this.elements.backgammonCheatWhiteToggle.checked);
+      this.render();
+    });
     this.elements.backgammonLangToggle.addEventListener("change", () => {
       this.language = this.elements.backgammonLangToggle.value;
       this.render();
@@ -56,6 +60,7 @@ export class BackgammonUI {
     document.addEventListener("pointermove", (event) => this.handleDragMove(event));
     document.addEventListener("pointerup", (event) => this.handleDragEnd(event));
     this.engine.setDoublingEnabled(false);
+    this.engine.setWhiteCheatMode(false);
     this.render();
   }
 
@@ -337,6 +342,11 @@ export class BackgammonUI {
       return;
     }
     this.elements.backgammonStatus.textContent = `${this.colorName(this.engine.turn)} ${t.toMove}`;
+    if (this.engine.whiteCheatMode) {
+      this.elements.backgammonStatus.textContent += this.language === "tr"
+        ? " (Beyaz hile modu aktif)"
+        : " (White cheat mode ON)";
+    }
   }
 
   renderMeta() {
