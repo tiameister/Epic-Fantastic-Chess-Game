@@ -2330,11 +2330,27 @@ body.layout-training .training-panel {
   flex-direction: row;
   align-items: stretch;
   gap: 12px;
+  min-width: 0;
+  justify-content: center;
 }
 
 /* Eval panel inherits its own styles; just ensure it flexes correctly here */
 .chess-board-area .eval-panel.side {
   flex-shrink: 0;
+  align-self: stretch;
+  width: 42px;
+  padding: 10px 8px;
+}
+
+/* Keep hidden state authoritative (beats .eval-panel.side display rule). */
+.chess-board-area .eval-panel.side.hidden {
+  display: none !important;
+}
+
+/* Avoid board overflow when eval panel is enabled. */
+.chess-board-area .board-wrap {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ── Player cards ────────────────────────────────────────────────────────── */
@@ -2727,8 +2743,25 @@ body.layout-training .training-panel {
 }
 
 /* ── Board size: fill more of the viewport now that sidebar is beside it ── */
-.board {
-  width: min(58vw, 680px);
+.chess-board-area .board {
+  width: min(100%, 680px);
+}
+
+/* Slightly slimmer eval lane on medium widths to preserve board space. */
+@media (max-width: 1200px) {
+  .chess-board-area {
+    gap: 10px;
+  }
+
+  .chess-board-area .eval-panel.side {
+    width: 36px;
+    padding: 8px 6px;
+  }
+
+  .chess-board-area .eval-track-vertical {
+    width: 14px;
+    min-height: 420px;
+  }
 }
 
 /* ── Responsive: stack to single column below 900px ─────────────────────── */
