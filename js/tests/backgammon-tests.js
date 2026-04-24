@@ -102,6 +102,74 @@ function testWinningMoveClearsDiceState() {
   assert(e.dice.length === 0, "Dice should be cleared at game end");
 }
 
+function testBarEntryIsMandatory() {
+  const e = new BackgammonEngine();
+  e.points = Array(25).fill(0);
+  e.turn = "white";
+  e.bar.white = 1;
+  e.points[8] = 2; // own checker on board should be ignored until bar enters
+  e.points[24] = -2; // blocked for die 1
+  e.points[23] = 0;  // open for die 2
+  e.dice = [1, 2];
+  e.movesLeft = [1, 2];
+
+  const legal = e.getLegalMoves();
+  assert(legal.length === 1, "Only one bar-entry move should be legal");
+  assert(legal[0].from === "bar" && legal[0].to === 23, "Must enter from bar using open die");
+}
+
+function testForcedHigherDieWhenOnlyOneMovePossible() {
+  const e = new BackgammonEngine();
+  e.points = Array(25).fill(0);
+  e.turn = "white";
+  e.bar.white = 1;
+  // Both entries are open, but no second move is possible after either entry.
+  e.points[24] = 0;   // die 1 entry
+  e.points[23] = 0;   // die 2 entry
+  e.points[22] = -2;  // blocks follow-up move from either entry
+  e.dice = [1, 2];
+  e.movesLeft = [1, 2];
+
+  const legal = e.getLegalMoves();
+  assert(legal.length === 1, "Only one move should remain");
+  assert(legal[0].die === 2, "Higher die must be forced when only one die can be played");
+  assert(legal[0].from === "bar" && legal[0].to === 23, "Forced move should use higher die entry point");
+}
+
+function testAmbiguousBearOffConsumesBetterDie() {
+  const e = new BackgammonEngine();
+  e.points = Array(25).fill(0);
+  e.turn = "white";
+  e.off.white = 13;
+  e.points[4] = 1;
+  e.points[6] = 1;
+  e.dice = [4, 6];
+  e.movesLeft = [4, 6];
+
+  const result = e.move(4, "off");
+  assert(result.ok, "Ambiguous bear-off should still be legal");
+  assert(e.movesLeft.length === 1, "Exactly one die should remain after first bear-off");
+  assert(e.movesLeft[0] === 6, "Engine should keep larger die for the stronger continuation");
+}
+
+function testDoublesProvideFourMoves() {
+  const e = new BackgammonEngine();
+  e.points = Array(25).fill(0);
+  e.turn = "white";
+  e.points[24] = 4;
+  e.dice = [6, 6];
+  e.movesLeft = [6, 6, 6, 6];
+
+  for (let i = 0; i < 4; i += 1) {
+    const legal = e.getLegalMoves();
+    assert(legal.length > 0, `Double sequence step ${i + 1} should have legal move`);
+    const chosen = legal.find((m) => m.from === 24) || legal[0];
+    const result = e.move(chosen.from, chosen.to);
+    assert(result.ok, `Double sequence step ${i + 1} should execute`);
+  }
+  assert(e.movesLeft.length === 0, "All four dice from doubles should be consumed");
+}
+
 function run() {
   testDoubleOfferFlow();
   testDoubleRejectAwardsPoints();
@@ -111,6 +179,10 @@ function run() {
   testHigherDieBearOffRule();
   testUndoRestoresState();
   testWinningMoveClearsDiceState();
+  testBarEntryIsMandatory();
+  testForcedHigherDieWhenOnlyOneMovePossible();
+  testAmbiguousBearOffConsumesBetterDie();
+  testDoublesProvideFourMoves();
   console.log("Backgammon tests passed.");
 }
 

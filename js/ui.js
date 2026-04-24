@@ -81,6 +81,7 @@ export class ChessUI {
     this.matchStats     = this.createEmptyMatchStats();
     this.lastEvalSnapshot = { score: 0, label: "" };
     this.pendingPromotion = null;
+    this.pendingDrawOfferBy = null;
     this.activeTab      = "game";
     this.layoutPreset   = "default";
     this.gamePersisted  = false;
@@ -139,32 +140,30 @@ export class ChessUI {
     });
 
     this.elements.toggleEvalBtn.addEventListener("click", () => {
-      this.isEvalVisible = !this.isEvalVisible;
-      this.elements.evalPanel.classList.toggle("hidden", !this.isEvalVisible);
-      this.elements.toggleEvalBtn.textContent = this.isEvalVisible ? "Hide Eval" : "Eval";
-      this.render(this.isEvalVisible ? "Evaluation bar shown." : "Evaluation bar hidden.");
+      this.setAnalysisMode(!this.analysisMode, this.analysisMode ? "Analysis mode off." : "Analysis mode on.");
     });
 
     // Zen Switch — Analysis Mode master toggle
     const analysisModeToggle = document.getElementById("analysisModeToggle");
     if (analysisModeToggle) {
       analysisModeToggle.addEventListener("change", () => {
-        this.analysisMode = analysisModeToggle.checked;
-        this.elements.chessCard.classList.toggle("analysis-on", this.analysisMode);
-        // Keep isEvalVisible in sync so the existing toggle-eval button stays consistent
-        this.isEvalVisible = this.analysisMode;
-        this.elements.evalPanel.classList.toggle("hidden", !this.isEvalVisible);
-        this.render(this.analysisMode ? "Analysis mode on." : "Analysis mode off.");
+        this.setAnalysisMode(analysisModeToggle.checked, analysisModeToggle.checked ? "Analysis mode on." : "Analysis mode off.");
       });
     }
 
-    // Apply initial eval visibility (hidden by default)
-    this.elements.evalPanel.classList.toggle("hidden", !this.isEvalVisible);
+    // Apply initial eval visibility (strictly follows analysis mode)
+    this.setAnalysisMode(this.analysisMode);
     this.elements.pauseClockBtn.addEventListener("click", () => {
       const result = this.clock.toggle();
       if (result) this.render(result === "paused" ? "Clock paused." : "Clock resumed.");
     });
     this.elements.offerDrawBtn.addEventListener("click", () => this.offerDraw());
+    if (this.elements.drawOfferAcceptBtn) {
+      this.elements.drawOfferAcceptBtn.addEventListener("click", () => this.acceptDrawOffer());
+    }
+    if (this.elements.drawOfferDeclineBtn) {
+      this.elements.drawOfferDeclineBtn.addEventListener("click", () => this.declineDrawOffer());
+    }
     this.elements.resignBtn.addEventListener("click", () => this.resignGame());
     this.elements.rematchBtn.addEventListener("click", () => this.rematch());
 
@@ -184,6 +183,8 @@ export class ChessUI {
       this.clock.start();
       this.selected = null;
       this.legalMoves = [];
+      this.pendingDrawOfferBy = null;
+      this.closeDrawOfferPrompt();
       this.stateStore.dispatch({ type: "UI/CLEAR_SELECTION" });
       this.playSound("move");
       this.render("Last move undone.");
@@ -259,9 +260,11 @@ export class ChessUI {
     this.matchRecorded = false;
     this.matchStats = this.createEmptyMatchStats();
     this.pendingPromotion = null;
+    this.pendingDrawOfferBy = null;
     this.gamePersisted = false;
     this._victoryShown = false;
     hideChessVictory();
+    this.closeDrawOfferPrompt();
     // Reset captured-piece trays
     if (this.elements.whiteCaptured) this.elements.whiteCaptured.innerHTML = "";
     if (this.elements.blackCaptured) this.elements.blackCaptured.innerHTML = "";
@@ -424,6 +427,11 @@ export class ChessUI {
 
   commitMove(context, promotionType = null) {
     this.history.exitViewIfNeeded();
+    if (this.pendingDrawOfferBy && context.movingSide !== this.pendingDrawOfferBy) {
+      // Opponent answered by playing a move, so the draw offer expires.
+      this.pendingDrawOfferBy = null;
+      this.closeDrawOfferPrompt();
+    }
     const result = this.engine.move(context.from, context.to, promotionType ? { promotionType } : {});
     if (!result.ok) {
       return result;
@@ -761,10 +769,30 @@ export class ChessUI {
     document.body.dataset.theme = themeName || "default";
   }
 
+  setAnalysisMode(enabled, message = null) {
+    this.analysisMode = Boolean(enabled);
+    this.isEvalVisible = this.analysisMode;
+    this.elements.chessCard.classList.toggle("analysis-on", this.analysisMode);
+    this.elements.evalPanel.classList.toggle("hidden", !this.analysisMode);
+
+    const analysisModeToggle = document.getElementById("analysisModeToggle");
+    if (analysisModeToggle && analysisModeToggle.checked !== this.analysisMode) {
+      analysisModeToggle.checked = this.analysisMode;
+    }
+    if (this.elements.toggleEvalBtn) {
+      this.elements.toggleEvalBtn.textContent = this.analysisMode ? "Analysis Off" : "Analysis On";
+    }
+    if (message) {
+      this.render(message);
+    }
+  }
+
   resignGame() {
     if (this.engine.isGameOver()) {
       return;
     }
+    this.pendingDrawOfferBy = null;
+    this.closeDrawOfferPrompt();
     const resigningSide = this.engine.turn;
     this.engine.resign(resigningSide);
     this.clock.stop();
@@ -776,16 +804,65 @@ export class ChessUI {
     if (this.engine.isGameOver()) {
       return;
     }
+    const sideToMove = this.engine.turn;
+    const opponent = this.oppositeColor(sideToMove);
+
+    if (this.pendingDrawOfferBy) {
+      if (this.pendingDrawOfferBy === sideToMove) {
+        this.render("Draw offer already pending. Opponent must accept or play.");
+        return;
+      }
+      this.acceptDrawOffer();
+      return;
+    }
+
+    this.pendingDrawOfferBy = sideToMove;
+    this.openDrawOfferPrompt(sideToMove);
+    this.render(`${this.colorName(sideToMove)} offered a draw. ${this.colorName(opponent)}: press Draw to accept or play a move to decline.`);
+  }
+
+  openDrawOfferPrompt(offeredBy) {
+    if (!this.elements.drawOfferModal || !this.elements.drawOfferText) return;
+    const responder = this.oppositeColor(offeredBy);
+    this.elements.drawOfferText.textContent = `${this.colorName(offeredBy)} offered a draw. ${this.colorName(responder)}, accept or decline.`;
+    this.elements.drawOfferModal.classList.remove("hidden");
+  }
+
+  closeDrawOfferPrompt() {
+    if (!this.elements.drawOfferModal) return;
+    this.elements.drawOfferModal.classList.add("hidden");
+  }
+
+  acceptDrawOffer() {
+    if (!this.pendingDrawOfferBy || this.engine.isGameOver()) {
+      this.closeDrawOfferPrompt();
+      return;
+    }
     this.engine.gameState = STATE.DRAW;
     this.engine.winner = null;
     this.engine.drawReason = "Draw agreed (local)";
+    this.pendingDrawOfferBy = null;
+    this.closeDrawOfferPrompt();
     this.clock.stop();
     this.playSound("gameOver");
-    this.render("Draw agreed.");
+    this.render("Draw offer accepted.");
+  }
+
+  declineDrawOffer() {
+    if (!this.pendingDrawOfferBy || this.engine.isGameOver()) {
+      this.closeDrawOfferPrompt();
+      return;
+    }
+    const offeredBy = this.pendingDrawOfferBy;
+    this.pendingDrawOfferBy = null;
+    this.closeDrawOfferPrompt();
+    this.render(`${this.colorName(this.oppositeColor(offeredBy))} declined the draw offer.`);
   }
 
   rematch() {
     this.resetGame();
+    this.pendingDrawOfferBy = null;
+    this.closeDrawOfferPrompt();
     this.render("Rematch started.");
   }
 

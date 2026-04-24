@@ -807,6 +807,27 @@ label {
   font-size: 1rem;
 }
 
+.draw-offer-card {
+  text-align: center;
+}
+
+#drawOfferText {
+  margin: 0 0 12px;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.draw-offer-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.draw-offer-actions button {
+  min-width: 100px;
+}
+
 .promotion-choices {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1347,6 +1368,11 @@ label {
 #backgammonCard .actions button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+#backgammonCard .actions button {
+  flex: 1 1 138px;
+  min-height: 40px;
 }
 
 #backgammonGameOverModal .promotion-card {
@@ -2635,11 +2661,6 @@ body.layout-training .training-panel {
   gap: 8px;
 }
 
-/* Show the eval bar in analysis mode */
-#chessCard.analysis-on #evalPanel {
-  display: flex !important;
-}
-
 .analysis-metric {
   display: flex;
   align-items: center;
@@ -3550,4 +3571,20 @@ body.layout-training .training-panel {
   .bj-outcome-card { padding: 1.5rem 1.2rem 1.3rem; }
   .bj-outcome-title { font-size: 1.5rem; }
   .bj-ch-bar { width: 44px; }
+
+  .bg-hud-chip {
+    font-size: 0.6rem;
+    padding: 2px 6px;
+    max-width: 46%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #backgammonCard .actions {
+    gap: 8px;
+  }
+
+  #blackjackCard .bj-nav-row {
+    flex-wrap: wrap;
+  }
 }
