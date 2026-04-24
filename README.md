@@ -1,6 +1,6 @@
-# Royal Chess (Local 2-Player)
+# Royal Board Games (Local 2-Player)
 
-A browser chess project built with plain HTML, CSS, and JavaScript.
+A browser board-games project built with plain HTML, CSS, and JavaScript.
 
 ## Student Project Note
 
@@ -11,7 +11,10 @@ If something feels rough, that is expected and part of the learning process.
 
 ## Current Features
 
+- Landing game chooser (Chess or Backgammon)
 - Local 2-player chess on one device
+- Local 2-player backgammon with core standard rules (dice, bar entry, hits, bearing off, doubles)
+- Backgammon match scoring (single/gammon/backgammon), doubling cube flow, and dice-roll animation
 - Core chess rules including castling, en passant, and promotion
 - Check, checkmate, stalemate, and timeout handling
 - Move highlighting, last-move tracking, undo, and move history
@@ -52,6 +55,8 @@ Run deterministic engine regression checks:
 - `js/engine/evaluator.js` - evaluator adapter and fallback heuristic layer
 - `js/training/training-system.js` - training content and mode helpers
 - `js/persistence/game-storage.js` - local finished/ongoing game persistence
+- `js/backgammon-engine.js` - backgammon rules, cube, and scoring
+- `js/backgammon-ui.js` - backgammon board rendering and interactions
 - `js/ui.js` - interaction and rendering layer
 - `js/evaluation.js` - scoring and evaluation logic
 - `js/tactical-eval.js` - tactical signal helpers

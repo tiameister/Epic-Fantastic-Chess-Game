@@ -87,6 +87,38 @@ body {
   padding: 24px;
 }
 
+.game-chooser {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 6, 23, 0.78);
+  z-index: 30;
+}
+
+.chooser-card {
+  width: min(560px, 92%);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 16px;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.95);
+}
+
+.chooser-card h1 {
+  margin: 0 0 8px;
+}
+
+.chooser-actions {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.chooser-note {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
 .app-shell {
   width: min(980px, 100%);
 }
@@ -826,6 +858,310 @@ label {
 
 .profile-tools button {
   flex: 1 1 170px;
+}
+
+.backgammon-board {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 72px 1fr 92px;
+  gap: 10px;
+  border: 1px solid rgba(120, 88, 58, 0.55);
+  border-radius: 14px;
+  padding: 12px;
+  background:
+    linear-gradient(135deg, rgba(108, 72, 48, 0.92), rgba(78, 48, 32, 0.94)),
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.03) 0 6px, rgba(0,0,0,0.03) 6px 12px);
+  box-shadow: inset 0 0 0 1px rgba(236, 209, 175, 0.2);
+  position: relative;
+}
+
+.backgammon-dice {
+  margin-top: 4px;
+  display: flex;
+  gap: 10px;
+  cursor: pointer;
+  justify-content: center;
+  align-items: center;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(228, 201, 164, 0.35);
+  background: rgba(32, 18, 10, 0.35);
+}
+
+.bg-die {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  border: 1px solid rgba(236, 209, 175, 0.65);
+  background: radial-gradient(circle at 30% 25%, #fff8ea 0 30%, #e6d4b6 72%, #c7ad84 100%);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: #38230f;
+  box-shadow: 0 5px 10px rgba(25, 15, 8, 0.45);
+}
+
+.bg-die-grid {
+  width: 82%;
+  height: 82%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  place-items: center;
+}
+
+.bg-pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #281708;
+}
+
+.backgammon-dice.rolling .bg-die {
+  animation: dice-roll-pop 620ms ease;
+}
+
+.bg-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.bg-half {
+  display: grid;
+  gap: 8px;
+}
+
+.bg-bar {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px;
+  background: linear-gradient(180deg, rgba(48, 30, 18, 0.78), rgba(28, 16, 10, 0.82));
+  border-radius: 8px;
+  border: 1px solid rgba(224, 184, 135, 0.35);
+  padding: 8px 6px;
+}
+
+.bg-bar-slot {
+  border: 1px solid rgba(225, 193, 151, 0.55);
+  border-radius: 8px;
+  background: rgba(19, 14, 10, 0.45);
+  color: #f6ead5;
+  font-size: 0.72rem;
+}
+
+.bg-bar-slot.selected {
+  outline: 2px solid #60a5fa;
+}
+
+.bg-off {
+  display: grid;
+  grid-template-rows: 1fr 1fr auto;
+  gap: 8px;
+}
+
+.bg-off-slot {
+  border-radius: 8px;
+  border: 1px solid rgba(226, 196, 154, 0.55);
+  background: rgba(19, 12, 8, 0.45);
+  display: grid;
+  place-items: center;
+  color: #f4e8d4;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  padding: 6px 2px;
+}
+
+.bg-off-stack {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+}
+
+.bg-off-label {
+  font-size: 0.65rem;
+  color: #d8c2a0;
+}
+
+.bg-off-checkers {
+  display: grid;
+  justify-items: center;
+  min-height: 30px;
+}
+
+.bg-point {
+  border: 0;
+  background: transparent;
+  color: #f5eada;
+  border-radius: 0;
+  min-height: 118px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 4px;
+  position: relative;
+}
+
+.bg-point::before {
+  content: "";
+  width: 100%;
+  height: 100%;
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  border-radius: 2px;
+  display: block;
+  opacity: 0.95;
+  border: 1px solid rgba(238, 223, 199, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.22),
+    0 0 0 1px rgba(58, 30, 18, 0.18);
+}
+
+.bg-point.top::before {
+  clip-path: polygon(50% 100%, 100% 0%, 0% 0%);
+}
+
+.bg-point.light::before {
+  background: linear-gradient(180deg, #efe2c8, #d7be93);
+}
+
+.bg-point.dark::before {
+  background: linear-gradient(180deg, #7b3f2a, #5b2d1e);
+}
+
+.bg-point.selected {
+  outline: 2px solid #f59e0b;
+  outline-offset: 1px;
+}
+
+.bg-point.has-legal {
+  filter: brightness(1.04);
+}
+
+.bg-point.legal-dest::after {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 26%, rgba(255,255,255,0.55), rgba(96, 165, 250, 0.45));
+  top: 48%;
+  transform: translateY(-50%);
+  box-shadow: 0 0 12px rgba(96, 165, 250, 0.6);
+}
+
+.bg-point.drop-hover::after {
+  background: radial-gradient(circle at 30% 24%, rgba(255,255,255,0.75), rgba(34, 197, 94, 0.55));
+  box-shadow: 0 0 14px rgba(34, 197, 94, 0.65);
+}
+
+.bg-point-label {
+  font-size: 0.72rem;
+  color: rgba(15, 9, 6, 0.7);
+  position: absolute;
+  z-index: 2;
+  top: 2px;
+}
+
+.bg-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: center;
+  position: absolute;
+  z-index: 2;
+  top: 18px;
+}
+
+.bg-point.top .bg-stack {
+  top: auto;
+  bottom: 18px;
+}
+
+.bg-checker {
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 1px solid rgba(18, 10, 6, 0.48);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+  transition: transform 220ms ease, box-shadow 200ms ease;
+  cursor: grab;
+}
+
+.bg-checker.lifted {
+  box-shadow: 0 7px 14px rgba(0, 0, 0, 0.45);
+  cursor: grabbing;
+}
+
+.bg-checker.white {
+  background: radial-gradient(circle at 30% 25%, #fffdf9 0 30%, #efe2ca 68%, #d2ba96 100%);
+}
+
+.bg-checker.black {
+  background: radial-gradient(circle at 30% 25%, #413127 0 25%, #271a14 70%, #160e0a 100%);
+}
+
+.bg-checker.moved {
+  animation: checker-slide-pop 260ms ease;
+}
+
+.bg-extra {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+@keyframes dice-roll-pop {
+  0% { transform: rotate(0deg) scale(1); opacity: 0.75; }
+  35% { transform: rotate(16deg) scale(1.14); opacity: 1; }
+  70% { transform: rotate(-12deg) scale(0.92); }
+  100% { transform: rotate(0deg) scale(1); opacity: 1; }
+}
+
+@keyframes checker-slide-pop {
+  0% { transform: translateY(-6px) scale(1.05); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.backgammon-hud {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px;
+  border: 1px solid rgba(226, 196, 154, 0.42);
+  border-radius: 12px;
+  padding: 8px;
+  background: rgba(32, 20, 12, 0.62);
+}
+
+#backgammonCard .topbar h1 {
+  font-family: "Cinzel", "Playfair Display", "Garamond", serif;
+  letter-spacing: 1px;
+}
+
+.backgammon-toast {
+  position: absolute;
+  right: 20px;
+  top: 86px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(20, 12, 7, 0.88);
+  border: 1px solid rgba(228, 194, 148, 0.42);
+  color: #f4e8d1;
+  transform: translateY(-10px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.backgammon-toast.show {
+  animation: tavla-toast 1.4s ease;
+}
+
+@keyframes tavla-toast {
+  0% { transform: translateY(-8px); opacity: 0; }
+  12% { transform: translateY(0); opacity: 1; }
+  85% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-8px); opacity: 0; }
 }
 
 body.layout-focus .meta-panel,

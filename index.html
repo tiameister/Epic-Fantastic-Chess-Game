@@ -7,8 +7,19 @@
   <link rel="stylesheet" href="./styles/main.css">
 </head>
 <body>
+  <section id="gameChooser" class="game-chooser">
+    <div class="chooser-card">
+      <h1>Game Hub</h1>
+      <p>Choose your game mode.</p>
+      <div class="chooser-actions">
+        <button id="chooseChessBtn" type="button">Play Chess</button>
+        <button id="chooseBackgammonBtn" type="button">Play Backgammon</button>
+      </div>
+      <p class="chooser-note">Backgammon plan: standard setup, dice turns, entering from bar, hits, bearing off, doubles, forced legal-move filtering.</p>
+    </div>
+  </section>
   <main class="app-shell">
-    <section class="game-card">
+    <section id="chessCard" class="game-card hidden">
       <header class="topbar">
         <h1>Royal Chess</h1>
         <p>Local 2-player game on one screen</p>
@@ -230,6 +241,49 @@
           <div id="promotionChoices" class="promotion-choices"></div>
         </div>
       </section>
+    </section>
+    <section id="backgammonCard" class="game-card hidden">
+      <header class="topbar">
+        <h1>Royal Backgammon</h1>
+        <p>Traditional Turkish Tavla mode</p>
+      </header>
+      <section class="actions">
+        <label for="backgammonLangToggle">
+          Language
+          <select id="backgammonLangToggle">
+            <option value="en" selected>English</option>
+            <option value="tr">Turkce</option>
+          </select>
+        </label>
+        <label class="switch-row" for="backgammonDoublingToggle">
+          Doubling Cube (Optional)
+          <input id="backgammonDoublingToggle" type="checkbox">
+        </label>
+        <label class="switch-row" for="backgammonCheatWhiteToggle">
+          Cheat Mode (White loaded dice)
+          <input id="backgammonCheatWhiteToggle" type="checkbox">
+        </label>
+      </section>
+      <section class="actions">
+        <button id="backgammonRollBtn" type="button">Roll Dice</button>
+        <button id="backgammonDoubleBtn" type="button">Offer Double</button>
+        <button id="backgammonAcceptDoubleBtn" type="button">Accept Double</button>
+        <button id="backgammonRejectDoubleBtn" type="button">Reject Double</button>
+        <button id="backgammonResetBtn" type="button">Reset Game</button>
+        <button id="backToChooserBtn" type="button">Back to Menu</button>
+      </section>
+      <section class="backgammon-hud">
+        <p id="backgammonStatus" class="label">white to move.</p>
+        <p id="backgammonScore" class="label"></p>
+        <p id="backgammonCube" class="label"></p>
+        <p id="backgammonBar" class="label"></p>
+        <p id="backgammonOff" class="label"></p>
+        <p id="backgammonCallout" class="label"></p>
+      </section>
+      <section id="backgammonDice" class="backgammon-dice" title="Click dice area to roll"></section>
+      <div id="backgammonToast" class="backgammon-toast" aria-live="polite"></div>
+      <section id="backgammonBoard" class="backgammon-board"></section>
+      <ul id="backgammonHints" class="meta-list hidden"></ul>
     </section>
   </main>
 

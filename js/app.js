@@ -1,12 +1,38 @@
 import { ChessEngine } from "./chess-engine.js";
 import { ChessUI } from "./ui.js";
 import { GameSound } from "./sound.js";
+import { BackgammonEngine } from "./backgammon-engine.js";
+import { BackgammonUI } from "./backgammon-ui.js";
 import { ProgressionSystem } from "./systems/progression-system.js";
 import { EvaluationAdapter } from "./engine/evaluator.js";
 import { TrainingSystem } from "./training/training-system.js";
 import { GameStorage } from "./persistence/game-storage.js";
 
 const elements = {
+  gameChooser: document.getElementById("gameChooser"),
+  chooseChessBtn: document.getElementById("chooseChessBtn"),
+  chooseBackgammonBtn: document.getElementById("chooseBackgammonBtn"),
+  chessCard: document.getElementById("chessCard"),
+  backgammonCard: document.getElementById("backgammonCard"),
+  backToChooserBtn: document.getElementById("backToChooserBtn"),
+  backgammonRollBtn: document.getElementById("backgammonRollBtn"),
+  backgammonLangToggle: document.getElementById("backgammonLangToggle"),
+  backgammonDoublingToggle: document.getElementById("backgammonDoublingToggle"),
+  backgammonCheatWhiteToggle: document.getElementById("backgammonCheatWhiteToggle"),
+  backgammonDoubleBtn: document.getElementById("backgammonDoubleBtn"),
+  backgammonAcceptDoubleBtn: document.getElementById("backgammonAcceptDoubleBtn"),
+  backgammonRejectDoubleBtn: document.getElementById("backgammonRejectDoubleBtn"),
+  backgammonResetBtn: document.getElementById("backgammonResetBtn"),
+  backgammonStatus: document.getElementById("backgammonStatus"),
+  backgammonCallout: document.getElementById("backgammonCallout"),
+  backgammonToast: document.getElementById("backgammonToast"),
+  backgammonScore: document.getElementById("backgammonScore"),
+  backgammonCube: document.getElementById("backgammonCube"),
+  backgammonDice: document.getElementById("backgammonDice"),
+  backgammonBoard: document.getElementById("backgammonBoard"),
+  backgammonBar: document.getElementById("backgammonBar"),
+  backgammonOff: document.getElementById("backgammonOff"),
+  backgammonHints: document.getElementById("backgammonHints"),
   board: document.getElementById("board"),
   turnLabel: document.getElementById("turnLabel"),
   activeSideBadge: document.getElementById("activeSideBadge"),
@@ -84,4 +110,35 @@ const evaluator = new EvaluationAdapter();
 const training = new TrainingSystem();
 const storage = new GameStorage();
 const ui = new ChessUI(engine, elements, sound, progression, evaluator, training, storage);
+const backgammonEngine = new BackgammonEngine();
+const backgammonUI = new BackgammonUI(backgammonEngine, elements);
 ui.init();
+backgammonUI.init();
+
+function showChooser() {
+  elements.gameChooser.classList.remove("hidden");
+  elements.chessCard.classList.add("hidden");
+  elements.backgammonCard.classList.add("hidden");
+  backgammonUI.setActive(false);
+}
+
+function showChess() {
+  elements.gameChooser.classList.add("hidden");
+  elements.backgammonCard.classList.add("hidden");
+  elements.chessCard.classList.remove("hidden");
+  backgammonUI.setActive(false);
+}
+
+function showBackgammon() {
+  elements.gameChooser.classList.add("hidden");
+  elements.chessCard.classList.add("hidden");
+  elements.backgammonCard.classList.remove("hidden");
+  backgammonUI.setActive(true);
+  backgammonUI.render();
+}
+
+elements.chooseChessBtn.addEventListener("click", showChess);
+elements.chooseBackgammonBtn.addEventListener("click", showBackgammon);
+elements.backToChooserBtn.addEventListener("click", showChooser);
+
+showChooser();
