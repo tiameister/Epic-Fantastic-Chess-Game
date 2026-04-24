@@ -16,6 +16,7 @@ const elements = {
   chooseChessBtn: document.getElementById("chooseChessBtn"),
   chooseBackgammonBtn: document.getElementById("chooseBackgammonBtn"),
   chooseBlackjackBtn: document.getElementById("chooseBlackjackBtn"),
+  chessBackToChooserBtn: document.getElementById("chessBackToChooserBtn"),
   chessCard: document.getElementById("chessCard"),
   backgammonCard: document.getElementById("backgammonCard"),
   blackjackCard: document.getElementById("blackjackCard"),
@@ -137,7 +138,16 @@ const elements = {
   tabGameBtn: document.getElementById("tabGameBtn"),
   tabAnalysisBtn: document.getElementById("tabAnalysisBtn"),
   tabProfileBtn: document.getElementById("tabProfileBtn"),
-  tabQuestsBtn: document.getElementById("tabQuestsBtn")
+  tabQuestsBtn: document.getElementById("tabQuestsBtn"),
+  chessCard: document.getElementById("chessCard"),
+  whiteCaptured: document.getElementById("whiteCaptured"),
+  blackCaptured: document.getElementById("blackCaptured"),
+  whiteAdvantage: document.getElementById("whiteAdvantage"),
+  blackAdvantage: document.getElementById("blackAdvantage"),
+  whitePlayerCard: document.getElementById("whitePlayerCard"),
+  blackPlayerCard: document.getElementById("blackPlayerCard"),
+  chessNarrative: document.getElementById("chessNarrative"),
+  evalSidebarScore: document.getElementById("evalSidebarScore")
 };
 
 const engine = new ChessEngine();
@@ -149,43 +159,47 @@ const storage = new GameStorage();
 const ui = new ChessUI(engine, elements, sound, progression, evaluator, training, storage);
 const backgammonEngine = new BackgammonEngine();
 const backgammonUI = new BackgammonUI(backgammonEngine, elements);
-const blackjackEngine = new BlackjackEngine();
-const blackjackUI = new BlackjackUI(blackjackEngine, elements, sound);
+const blackjackEnabled = Boolean(elements.blackjackCard && elements.chooseBlackjackBtn);
+const blackjackEngine = blackjackEnabled ? new BlackjackEngine() : null;
+const blackjackUI = blackjackEnabled ? new BlackjackUI(blackjackEngine, elements, sound) : null;
 ui.init();
 backgammonUI.init();
-blackjackUI.init();
+if (blackjackUI) blackjackUI.init();
 
 function showChooser() {
   elements.gameChooser.classList.remove("hidden");
   elements.chessCard.classList.add("hidden");
   elements.backgammonCard.classList.add("hidden");
-  elements.blackjackCard.classList.add("hidden");
+  if (elements.blackjackCard) elements.blackjackCard.classList.add("hidden");
   backgammonUI.setActive(false);
-  blackjackUI.setActive(false);
+  if (blackjackUI) blackjackUI.setActive(false);
 }
 
 function showChess() {
   elements.gameChooser.classList.add("hidden");
   elements.backgammonCard.classList.add("hidden");
-  elements.blackjackCard.classList.add("hidden");
+  if (elements.blackjackCard) elements.blackjackCard.classList.add("hidden");
   elements.chessCard.classList.remove("hidden");
   backgammonUI.setActive(false);
-  blackjackUI.setActive(false);
+  if (blackjackUI) blackjackUI.setActive(false);
   showMatchSplash("Royal Chess", "Local Two-Player");
 }
 
 function showBackgammon() {
   elements.gameChooser.classList.add("hidden");
   elements.chessCard.classList.add("hidden");
-  elements.blackjackCard.classList.add("hidden");
+  if (elements.blackjackCard) elements.blackjackCard.classList.add("hidden");
   elements.backgammonCard.classList.remove("hidden");
   backgammonUI.setActive(true);
-  blackjackUI.setActive(false);
+  if (blackjackUI) blackjackUI.setActive(false);
   backgammonUI.render();
   showMatchSplash("Royal Backgammon", "Turkish Tavla");
 }
 
 function showBlackjack() {
+  if (!blackjackUI || !elements.blackjackCard) {
+    return;
+  }
   elements.gameChooser.classList.add("hidden");
   elements.chessCard.classList.add("hidden");
   elements.backgammonCard.classList.add("hidden");
@@ -197,8 +211,9 @@ function showBlackjack() {
 
 elements.chooseChessBtn.addEventListener("click", showChess);
 elements.chooseBackgammonBtn.addEventListener("click", showBackgammon);
-elements.chooseBlackjackBtn.addEventListener("click", showBlackjack);
-elements.backToChooserBtn.addEventListener("click", showChooser);
-elements.bjBackToChooserBtn.addEventListener("click", showChooser);
+if (elements.chooseBlackjackBtn) elements.chooseBlackjackBtn.addEventListener("click", showBlackjack);
+if (elements.chessBackToChooserBtn) elements.chessBackToChooserBtn.addEventListener("click", showChooser);
+if (elements.backToChooserBtn) elements.backToChooserBtn.addEventListener("click", showChooser);
+if (elements.bjBackToChooserBtn) elements.bjBackToChooserBtn.addEventListener("click", showChooser);
 
 showChooser();

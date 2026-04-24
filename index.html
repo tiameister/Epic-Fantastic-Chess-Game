@@ -14,6 +14,7 @@
       <div class="chooser-actions">
         <button id="chooseChessBtn" type="button">Play Chess</button>
         <button id="chooseBackgammonBtn" type="button">Play Backgammon</button>
+        <button id="chooseBlackjackBtn" type="button">Play Blackjack</button>
       </div>
       <p class="chooser-note">Local, polished board games with quick switching and rich UX.</p>
     </div>
@@ -165,6 +166,7 @@
             <button id="flipBtn"       type="button">Flip</button>
             <button id="pauseClockBtn" type="button">Pause</button>
             <button id="toggleEvalBtn" type="button">Eval</button>
+            <button id="chessBackToChooserBtn" type="button">Back to Menu</button>
           </div>
 
           <!-- Collapsible settings -->
@@ -327,6 +329,76 @@
           <p id="backgammonGameOverFlavor" class="label"></p>
           <button id="backgammonNewRoundBtn" type="button">Start Next Round</button>
         </div>
+      </section>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!--  BLACKJACK                                                          -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <section id="blackjackCard" class="game-card hidden">
+      <header class="topbar">
+        <h1>Royal Blackjack</h1>
+        <p>Classic local Blackjack table - by Taha Ilter Akar</p>
+      </header>
+
+      <section class="bj-table" aria-label="Blackjack table">
+        <div id="bjShoe" class="bj-shoe" aria-label="Card shoe">
+          <div class="bj-shoe-deck-stack"></div>
+          <div class="bj-shoe-body">
+            <span class="bj-shoe-label">Shoe</span>
+            <span id="bjShoeIndicator" class="bj-shoe-indicator">Fresh</span>
+          </div>
+        </div>
+
+        <div class="bj-dealer-zone">
+          <div class="bj-zone-label">Dealer</div>
+          <div id="bjDealerHand" class="bj-hand" aria-live="polite"></div>
+          <div id="bjDealerValue" class="bj-hand-value bj-hand-value-dealer"></div>
+        </div>
+
+        <div class="bj-felt-arc"><span>BLACKJACK PAYS 3:2</span></div>
+
+        <div class="bj-player-zone">
+          <div class="bj-zone-label">Player</div>
+          <div id="bjPlayerHandWrapper" class="bj-player-hand-wrapper" aria-live="polite"></div>
+        </div>
+
+        <div class="bj-bet-zone">
+          <div class="bj-bet-label">Bet: <strong id="bjBetAmount">$0</strong></div>
+          <div id="bjChipsDisplay" class="bj-chips-display" aria-label="Bet chips"></div>
+          <div id="bjBalance" class="bj-balance">Balance: $1000</div>
+        </div>
+
+        <div id="bjStatus" class="bj-status" aria-live="polite">Place your bet and deal to begin.</div>
+
+        <div id="bjBettingControls" class="bj-betting-controls">
+          <div id="bjChipSelector" class="bj-chip-selector" aria-label="Chip selector"></div>
+          <div class="bj-bet-actions">
+            <button id="bjClearBetBtn" type="button">Clear Bet</button>
+            <button id="bjDealBtn" type="button" class="bj-btn-primary">Deal</button>
+          </div>
+        </div>
+
+        <div id="bjActionControls" class="bj-action-controls bj-hidden">
+          <button id="bjHitBtn" type="button" class="bj-btn-action">Hit</button>
+          <button id="bjStandBtn" type="button" class="bj-btn-action">Stand</button>
+          <button id="bjDoubleBtn" type="button" class="bj-btn-action">Double</button>
+          <button id="bjSplitBtn" type="button" class="bj-btn-action">Split</button>
+        </div>
+
+        <div class="bj-nav-row">
+          <button id="bjNextRoundBtn" type="button">Next Round</button>
+          <button id="bjNewShoeBtn" type="button">New Shoe</button>
+          <button id="bjBackToChooserBtn" type="button">Back to Menu</button>
+        </div>
+
+        <section id="bjOutcomeOverlay" class="bj-outcome-overlay bj-hidden" aria-live="assertive">
+          <div class="bj-outcome-card">
+            <h3 id="bjOutcomeTitle" class="bj-outcome-title">Round Result</h3>
+            <p id="bjOutcomeDetail" class="bj-outcome-detail"></p>
+          </div>
+        </section>
+        <canvas id="bjConfettiCanvas" class="bj-confetti-canvas" aria-hidden="true"></canvas>
       </section>
     </section>
 

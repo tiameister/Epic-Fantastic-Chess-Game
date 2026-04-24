@@ -2025,6 +2025,480 @@ body.layout-training .training-panel {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   CHESS — FOCUSED GAME LAYOUT
+   Two-column grid: hero board (left) + sidebar (right).
+   All .analysis-only sections are hidden until #chessCard.analysis-on.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Visually hidden (off-screen, still in DOM for JS compatibility) ─────── */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Outer two-column shell ──────────────────────────────────────────────── */
+.chess-game-layout {
+  display: grid;
+  grid-template-columns: 1fr 272px;
+  gap: 20px;
+  align-items: start;
+  margin-top: 14px;
+}
+
+/* ── Left column: board + player cards ──────────────────────────────────── */
+.chess-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Board area: eval bar (optional) + fancy frame side by side */
+.chess-board-area {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 12px;
+}
+
+/* Eval panel inherits its own styles; just ensure it flexes correctly here */
+.chess-board-area .eval-panel.side {
+  flex-shrink: 0;
+}
+
+/* ── Player cards ────────────────────────────────────────────────────────── */
+.chess-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--panel-bg);
+  border: 1px solid var(--card-border);
+  transition: box-shadow 0.35s ease, border-color 0.35s ease;
+}
+
+/* Active-turn glow replaces the old "White to move" text box */
+.chess-player.active-turn {
+  border-color: rgba(96, 165, 250, 0.5);
+  box-shadow:
+    0 0 0 2px rgba(96, 165, 250, 0.22),
+    0 0 18px rgba(96, 165, 250, 0.18);
+}
+
+.chess-player-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.chess-avatar {
+  font-size: 1.35rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.chess-player-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+/* Captured pieces tray */
+.chess-captured-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0px 2px;
+  align-items: center;
+  min-height: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.chess-captured-piece {
+  font-size: 0.75rem;
+  line-height: 1;
+  opacity: 0.72;
+}
+
+/* Material advantage score (+3, +5 etc.) */
+.chess-material-adv {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 20px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Clock display inside the player card */
+.chess-player-clock-wrap {
+  flex-shrink: 0;
+}
+
+.chess-clock-display {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--card-border);
+  min-width: 72px;
+  text-align: center;
+  transition: color 0.3s, background 0.3s, border-color 0.3s;
+}
+
+.chess-player.active-turn .chess-clock-display {
+  color: #93c5fd;
+  background: rgba(96, 165, 250, 0.1);
+  border-color: rgba(96, 165, 250, 0.38);
+}
+
+/* Running-low clock pulse */
+.chess-clock-display.low-time {
+  color: #f87171;
+  animation: clock-pulse 1s ease-in-out infinite;
+}
+
+@keyframes clock-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+
+/* ── Narrative status bar ────────────────────────────────────────────────── */
+.chess-narrative {
+  text-align: center;
+  font-size: 0.86rem;
+  color: var(--muted);
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--panel-bg);
+  border: 1px solid var(--card-border);
+  letter-spacing: 0.01em;
+  transition: color 0.25s, border-color 0.25s;
+}
+
+.chess-narrative.narrative-alert {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+.chess-narrative.narrative-danger {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.chess-narrative.narrative-done {
+  color: #86efac;
+  border-color: rgba(134, 239, 172, 0.3);
+}
+
+/* ── Right column: sidebar ───────────────────────────────────────────────── */
+.chess-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-section {
+  background: var(--panel-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.sidebar-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.sidebar-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* History list */
+.sidebar-history .history-list {
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+.sidebar-history .history-list li {
+  display: inline;
+}
+
+.sidebar-history .history-move-num {
+  font-size: 0.76rem;
+  color: var(--muted);
+  margin-right: 1px;
+}
+
+.sidebar-history .history-move-btn {
+  display: inline;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-history .history-move-btn:hover {
+  background: rgba(148, 163, 184, 0.15);
+}
+
+/* History nav buttons row */
+.history-nav-inline {
+  display: flex;
+  gap: 3px;
+}
+
+.history-nav-inline button {
+  padding: 2px 6px;
+  font-size: 0.72rem;
+  border-radius: 4px;
+  min-width: 24px;
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid var(--card-border);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.history-nav-inline button:hover {
+  background: rgba(148, 163, 184, 0.22);
+  color: var(--text);
+}
+
+/* PGN controls row */
+.pgn-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.pgn-row button {
+  font-size: 0.74rem;
+  padding: 4px 8px;
+  border-radius: 5px;
+}
+
+/* Action buttons grid */
+.sidebar-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.sidebar-actions button {
+  font-size: 0.78rem;
+  padding: 7px 8px;
+  border-radius: 7px;
+}
+
+/* ── Zen Switch (Analysis Mode toggle) ───────────────────────────────────── */
+.zen-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.zen-label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+
+.zen-switch {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.zen-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.zen-track {
+  display: block;
+  width: 42px;
+  height: 23px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.25);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  transition: background 0.25s, border-color 0.25s;
+  position: relative;
+}
+
+.zen-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.25s;
+}
+
+.zen-switch input:checked + .zen-track {
+  background: rgba(96, 165, 250, 0.32);
+  border-color: rgba(96, 165, 250, 0.5);
+}
+
+.zen-switch input:checked + .zen-track::after {
+  transform: translateX(19px);
+  background: var(--accent);
+}
+
+/* ── Analysis-only sections (hidden by default, shown when analysis-on) ───── */
+.analysis-only {
+  display: none;
+}
+
+#chessCard.analysis-on .analysis-only {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Show the eval bar in analysis mode */
+#chessCard.analysis-on #evalPanel {
+  display: flex !important;
+}
+
+.analysis-metric {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.analysis-metric-label {
+  font-size: 0.76rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+
+.analysis-score {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text);
+  text-align: right;
+}
+
+/* ── Color-coded move history in analysis mode ───────────────────────────── */
+#chessCard.analysis-on .history-move-btn.quality-blunder    { color: #f87171; }
+#chessCard.analysis-on .history-move-btn.quality-mistake    { color: #fb923c; }
+#chessCard.analysis-on .history-move-btn.quality-great-move { color: #86efac; }
+#chessCard.analysis-on .history-move-btn.quality-brilliant  { color: #60a5fa; }
+#chessCard.analysis-on .history-move-btn.quality-best-move  { color: #a3e635; }
+#chessCard.analysis-on .history-move-btn.quality-winning-advantage { color: #34d399; }
+
+/* ── Sidebar settings (collapsible) ─────────────────────────────────────── */
+.sidebar-settings {
+  font-size: 0.82rem;
+}
+
+.sidebar-settings summary {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sidebar-settings .settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.sidebar-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.sidebar-settings select {
+  font-size: 0.78rem;
+  padding: 4px 8px;
+  border-radius: 5px;
+}
+
+/* ── Board size: fill more of the viewport now that sidebar is beside it ── */
+.board {
+  width: min(58vw, 680px);
+}
+
+/* ── Responsive: stack to single column below 900px ─────────────────────── */
+@media (max-width: 900px) {
+  .chess-game-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .chess-sidebar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .sidebar-history {
+    grid-column: 1 / -1;
+  }
+
+  .board {
+    width: min(88vw, 680px);
+  }
+}
+
+@media (max-width: 600px) {
+  .chess-sidebar {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    BLACKJACK — ROYAL 21
    Scoped entirely under #blackjackCard / .bj-* to avoid collisions.
    ═══════════════════════════════════════════════════════════════════════════ */

@@ -72,7 +72,8 @@ export class ChessUI {
     this.legalMoves     = [];
     this.orientation    = COLOR.WHITE;
     this.autoFlipEnabled = false;
-    this.isEvalVisible  = true;
+    this.isEvalVisible  = false;   // Eval hidden by default; Analysis Mode shows it
+    this.analysisMode   = false;   // Zen Switch state
     this.lastEvaluationScore = this.evaluateScore();
     this.currentMoveQuality  = "Neutral";
     this.heartbeatLevel = 0;
@@ -140,9 +141,25 @@ export class ChessUI {
     this.elements.toggleEvalBtn.addEventListener("click", () => {
       this.isEvalVisible = !this.isEvalVisible;
       this.elements.evalPanel.classList.toggle("hidden", !this.isEvalVisible);
-      this.elements.toggleEvalBtn.textContent = this.isEvalVisible ? "Hide Eval" : "Show Eval";
+      this.elements.toggleEvalBtn.textContent = this.isEvalVisible ? "Hide Eval" : "Eval";
       this.render(this.isEvalVisible ? "Evaluation bar shown." : "Evaluation bar hidden.");
     });
+
+    // Zen Switch — Analysis Mode master toggle
+    const analysisModeToggle = document.getElementById("analysisModeToggle");
+    if (analysisModeToggle) {
+      analysisModeToggle.addEventListener("change", () => {
+        this.analysisMode = analysisModeToggle.checked;
+        this.elements.chessCard.classList.toggle("analysis-on", this.analysisMode);
+        // Keep isEvalVisible in sync so the existing toggle-eval button stays consistent
+        this.isEvalVisible = this.analysisMode;
+        this.elements.evalPanel.classList.toggle("hidden", !this.isEvalVisible);
+        this.render(this.analysisMode ? "Analysis mode on." : "Analysis mode off.");
+      });
+    }
+
+    // Apply initial eval visibility (hidden by default)
+    this.elements.evalPanel.classList.toggle("hidden", !this.isEvalVisible);
     this.elements.pauseClockBtn.addEventListener("click", () => {
       const result = this.clock.toggle();
       if (result) this.render(result === "paused" ? "Clock paused." : "Clock resumed.");
@@ -245,6 +262,11 @@ export class ChessUI {
     this.gamePersisted = false;
     this._victoryShown = false;
     hideChessVictory();
+    // Reset captured-piece trays
+    if (this.elements.whiteCaptured) this.elements.whiteCaptured.innerHTML = "";
+    if (this.elements.blackCaptured) this.elements.blackCaptured.innerHTML = "";
+    if (this.elements.whiteAdvantage) this.elements.whiteAdvantage.textContent = "";
+    if (this.elements.blackAdvantage) this.elements.blackAdvantage.textContent = "";
     this.closePromotionPrompt();
     this.history.rebuild();
     this.toggleGameOverPanel(false);
@@ -508,6 +530,7 @@ export class ChessUI {
       this.setMessage(optionalMessage);
     }
 
+    // Legacy compat elements (off-screen, kept for JS that still writes to them)
     this.elements.turnLabel.textContent = this.colorName(this.engine.turn);
     this.elements.activeSideBadge.textContent = `${this.colorName(this.engine.turn)} to move`;
     this.elements.activeSideBadge.classList.remove("white", "black");
@@ -517,6 +540,11 @@ export class ChessUI {
     this.elements.moveQualityLabel.className = "quality-label";
     this.elements.moveQualityLabel.classList.add(this.currentMoveQuality.toLowerCase().replace(/\s+/g, "-"));
     this.lastEvalSnapshot = this.getEvaluationSnapshot();
+
+    // New focused UI: narrative bar, player cards, captured pieces
+    this._updateNarrative(optionalMessage);
+    this._updatePlayerCards();
+    this.renderCapturedPieces();
     this.renderProfile();
     this.renderMetaProgress();
     this.history.renderHistory((ply) => this.history.goTo(ply));
@@ -821,11 +849,20 @@ export class ChessUI {
   }
 
   renderEvaluation(snapshot = null) {
-    if (!this.isEvalVisible) {
-      return;
-    }
     const evaluation = snapshot || this.getEvaluationSnapshot();
-    const percent = scoreToBarPercent(evaluation.score);
+    const score = evaluation.score;
+    const label = score > 0.25 ? "White better" : score < -0.25 ? "Black better" : "Equal";
+    const prefix = score > 0 ? "+" : "";
+    const shortText = evaluation.label || `${prefix}${score.toFixed(2)} (${label})`;
+
+    // Always update the sidebar score text (used in analysis mode)
+    if (this.elements.evalSidebarScore) {
+      this.elements.evalSidebarScore.textContent = evaluation.label || `${prefix}${score.toFixed(2)} — ${label}`;
+    }
+
+    if (!this.isEvalVisible) return;
+
+    const percent = scoreToBarPercent(score);
     if (window.innerWidth <= 760) {
       this.elements.evalFill.style.width = `${percent}%`;
       this.elements.evalFill.style.height = "100%";
@@ -833,14 +870,133 @@ export class ChessUI {
       this.elements.evalFill.style.height = `${percent}%`;
       this.elements.evalFill.style.width = "100%";
     }
-    if (evaluation.label) {
-      this.elements.evalText.textContent = `Evaluation: ${evaluation.label}`;
-      return;
+    this.elements.evalText.textContent = `Eval: ${shortText}`;
+  }
+
+  // ─── Narrative bar ──────────────────────────────────────────────────────
+
+  _updateNarrative(contextMessage) {
+    const el = this.elements.chessNarrative;
+    if (!el) return;
+    const turn = this.colorName(this.engine.turn);
+    let text, variant = "";
+
+    switch (this.engine.gameState) {
+      case STATE.CHECKMATE:
+        text = `♚ Checkmate — ${this.colorName(this.engine.winner)} wins`;
+        variant = "narrative-done";
+        break;
+      case STATE.STALEMATE:
+        text = "½ Stalemate — Draw";
+        variant = "narrative-done";
+        break;
+      case STATE.DRAW:
+        text = `½ Draw — ${this.engine.drawReason || "Rule draw"}`;
+        variant = "narrative-done";
+        break;
+      case STATE.RESIGN:
+        text = `${this.colorName(this.engine.winner)} wins by resignation`;
+        variant = "narrative-done";
+        break;
+      case STATE.TIMEOUT:
+        text = `⏱ Timeout — ${this.colorName(this.engine.winner)} wins`;
+        variant = "narrative-done";
+        break;
+      case STATE.CHECK:
+        text = `⚡ ${turn} is in Check!`;
+        variant = "narrative-danger";
+        break;
+      default: {
+        const action = this.selected ? "Choose a highlighted square" : "Select a piece";
+        const quality = (this.currentMoveQuality && this.currentMoveQuality !== "Neutral")
+          ? ` · ${this.currentMoveQuality}` : "";
+        text = `${turn} to move · ${action}${quality}`;
+      }
     }
-    const score = evaluation.score;
-    const label = score > 0.25 ? "White better" : score < -0.25 ? "Black better" : "Equal";
-    const prefix = score > 0 ? "+" : "";
-    this.elements.evalText.textContent = `Evaluation: ${prefix}${score.toFixed(2)} (${label})`;
+
+    el.textContent = text;
+    el.className = `chess-narrative${variant ? ` ${variant}` : ""}`;
+  }
+
+  // ─── Player card active-turn glow ────────────────────────────────────────
+
+  _updatePlayerCards() {
+    const white = this.elements.whitePlayerCard;
+    const black = this.elements.blackPlayerCard;
+    if (!white || !black) return;
+    const gameOver = this.engine.isGameOver();
+    const isWhite  = this.engine.turn === COLOR.WHITE;
+    white.classList.toggle("active-turn", isWhite  && !gameOver);
+    black.classList.toggle("active-turn", !isWhite && !gameOver);
+  }
+
+  // ─── Captured pieces + material advantage ───────────────────────────────
+
+  getCapturedPieces() {
+    const INITIAL = { p: 8, r: 2, n: 2, b: 2, q: 1 };
+    const current  = { white: {}, black: {} };
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = this.engine.getPiece(r, c, this.engine.board);
+        if (!piece || piece.type === "k") continue;
+        const col = piece.color;
+        current[col][piece.type] = (current[col][piece.type] || 0) + 1;
+      }
+    }
+    // captured[capturer] = pieces removed from the opponent's starting set
+    // white captured black pieces → captured.white = missing black pieces
+    // black captured white pieces → captured.black = missing white pieces
+    const captured = { white: {}, black: {} };
+    for (const [type, startCount] of Object.entries(INITIAL)) {
+      const whiteMissing = startCount - (current.white[type] || 0);
+      const blackMissing = startCount - (current.black[type] || 0);
+      if (whiteMissing > 0) captured.black[type] = (captured.black[type] || 0) + whiteMissing;
+      if (blackMissing > 0) captured.white[type] = (captured.white[type] || 0) + blackMissing;
+    }
+    return captured;
+  }
+
+  renderCapturedPieces() {
+    const whiteTray = this.elements.whiteCaptured;
+    const blackTray = this.elements.blackCaptured;
+    const whiteAdv  = this.elements.whiteAdvantage;
+    const blackAdv  = this.elements.blackAdvantage;
+    if (!whiteTray || !blackTray) return;
+
+    const VALS = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+    // Icons: pieces captured by white = black pieces (shown with black piece icons)
+    // Icons: pieces captured by black = white pieces (shown with white piece icons)
+    const ICONS = {
+      white: { p: "♙", n: "♘", b: "♗", r: "♖", q: "♕" },
+      black: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛" }
+    };
+    const ORDER = ["q", "r", "b", "n", "p"];
+
+    const captured = this.getCapturedPieces();
+
+    const buildTray = (trayEl, capturer, iconColor) => {
+      trayEl.innerHTML = "";
+      let totalValue = 0;
+      for (const type of ORDER) {
+        const count = captured[capturer][type] || 0;
+        if (!count) continue;
+        totalValue += (VALS[type] || 0) * count;
+        for (let i = 0; i < count; i++) {
+          const span = document.createElement("span");
+          span.className = "chess-captured-piece";
+          span.textContent = ICONS[iconColor][type];
+          trayEl.appendChild(span);
+        }
+      }
+      return totalValue;
+    };
+
+    const whiteValue = buildTray(whiteTray, "white", "black"); // black pieces white captured
+    const blackValue = buildTray(blackTray, "black", "white"); // white pieces black captured
+    const diff = whiteValue - blackValue;
+
+    if (whiteAdv) whiteAdv.textContent = diff > 0  ? `+${diff}`  : "";
+    if (blackAdv) blackAdv.textContent = diff < 0  ? `+${-diff}` : "";
   }
 
   getEvaluationSnapshot() {

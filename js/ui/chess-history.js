@@ -83,12 +83,27 @@ export class ChessHistoryManager {
     list.innerHTML = "";
     this._engine.moveHistory.forEach((move, index) => {
       const li = document.createElement("li");
+
+      // Move number prefix: "1." for white, "1..." for black
       const turnNum = Math.floor(index / 2) + 1;
-      const prefix  = index % 2 === 0 ? `${turnNum}.` : `${turnNum}...`;
+      if (index % 2 === 0) {
+        const num = document.createElement("span");
+        num.className = "history-move-num";
+        num.textContent = `${turnNum}. `;
+        li.appendChild(num);
+      }
+
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "history-move-btn";
-      btn.textContent = `${prefix} ${move.san || move.notation}`;
+
+      // Quality class for analysis-mode colour coding (CSS only activates it)
+      if (move.quality && move.quality !== "Neutral") {
+        btn.classList.add(`quality-${move.quality.toLowerCase().replace(/\s+/g, "-")}`);
+      }
+
+      btn.textContent = move.san || move.notation;
+      btn.title = move.quality || "";
       btn.addEventListener("click", () => onPlyClick(index + 1));
       li.appendChild(btn);
       list.appendChild(li);
