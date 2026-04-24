@@ -7,6 +7,7 @@ import { ProgressionSystem } from "./systems/progression-system.js";
 import { EvaluationAdapter } from "./engine/evaluator.js";
 import { TrainingSystem } from "./training/training-system.js";
 import { GameStorage } from "./persistence/game-storage.js";
+import { showMatchSplash } from "./ui/game-feel.js";
 
 const elements = {
   gameChooser: document.getElementById("gameChooser"),
@@ -133,6 +134,7 @@ function showChess() {
   elements.backgammonCard.classList.add("hidden");
   elements.chessCard.classList.remove("hidden");
   backgammonUI.setActive(false);
+  showMatchSplash("Royal Chess", "Local Two-Player");
 }
 
 function showBackgammon() {
@@ -141,6 +143,7 @@ function showBackgammon() {
   elements.backgammonCard.classList.remove("hidden");
   backgammonUI.setActive(true);
   backgammonUI.render();
+  showMatchSplash("Royal Backgammon", "Turkish Tavla");
 }
 
 elements.chooseChessBtn.addEventListener("click", showChess);

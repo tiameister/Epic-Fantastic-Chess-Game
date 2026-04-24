@@ -6,6 +6,13 @@ import { createStateStore } from "./state/store.js";
 import { ChessBoardRenderer } from "./ui/board-renderer.js";
 import { ChessClock } from "./ui/chess-clock.js";
 import { ChessHistoryManager } from "./ui/chess-history.js";
+import { PieceAnimator } from "./ui/piece-animator.js";
+import {
+  showChessVictory,
+  hideChessVictory,
+  showChessToast,
+  chessResultMeta,
+} from "./ui/game-feel.js";
 
 export class ChessUI {
   constructor(engine, elements, sound, progression = null, evaluator = null, training = null, storage = null) {
@@ -57,6 +64,9 @@ export class ChessUI {
 
     this.history.setBadgeFn((label) => this.getQualityBadge(label));
 
+    // ── Animation ─────────────────────────────────────────────────────────
+    this.pieceAnimator = new PieceAnimator();
+
     // ── UI state ──────────────────────────────────────────────────────────
     this.selected       = null;
     this.legalMoves     = [];
@@ -73,6 +83,7 @@ export class ChessUI {
     this.activeTab      = "game";
     this.layoutPreset   = "default";
     this.gamePersisted  = false;
+    this._victoryShown  = false;
 
     this.stateStore = createStateStore({
       gameState: { turn: this.engine.turn, status: this.engine.gameState, result: null, ply: 0 },
@@ -232,6 +243,8 @@ export class ChessUI {
     this.matchStats = this.createEmptyMatchStats();
     this.pendingPromotion = null;
     this.gamePersisted = false;
+    this._victoryShown = false;
+    hideChessVictory();
     this.closePromotionPrompt();
     this.history.rebuild();
     this.toggleGameOverPanel(false);
@@ -349,6 +362,15 @@ export class ChessUI {
         return;
       }
 
+      // Snapshot source square for Lerp animation (must happen before render rebuilds DOM)
+      this.pieceAnimator.prepare(this.elements.board, from.row, from.col);
+      if (targetBeforeMove) {
+        // Burst-shrink the captured piece before the board rebuilds
+        this.pieceAnimator.animateCapture(
+          this.elements.board, this.elements.boardFrame, to.row, to.col
+        );
+      }
+
       const result = this.commitMove({
         from,
         to,
@@ -363,6 +385,10 @@ export class ChessUI {
       this.clock.start();
       this.render(result.ok ? "Move completed." : result.reason);
       this.playStateSound();
+      // Play Lerp ghost from old→new square (non-blocking)
+      if (result.ok) {
+        this.pieceAnimator.play(this.elements.board, this.elements.boardFrame, to.row, to.col);
+      }
       return;
     }
 
@@ -433,6 +459,7 @@ export class ChessUI {
     }
     if (this.engine.gameState === STATE.CHECK) {
       this.matchStats.checksGiven[movingSide] += 1;
+      showChessToast(`${this.colorName(this.engine.turn)} is in Check!`, "check");
       if (this.progression) {
         this.progression.recordCheck(1);
       }
@@ -735,7 +762,8 @@ export class ChessUI {
 
   updateGameOverPanel() {
     const isGameOver = this.engine.isGameOver();
-    this.toggleGameOverPanel(isGameOver);
+    // Keep the legacy panel hidden — the rich overlay replaces it
+    this.elements.gameOverPanel.classList.add("hidden");
     if (!isGameOver) {
       return;
     }
@@ -751,28 +779,40 @@ export class ChessUI {
       this.renderMetaProgress();
     }
 
-    if (this.engine.gameState === STATE.CHECKMATE) {
-      this.elements.gameOverTitle.textContent = "Checkmate";
-      this.elements.gameOverText.textContent = `${this.colorName(this.engine.winner)} wins the game.`;
-      return;
-    }
-    if (this.engine.gameState === STATE.RESIGN) {
-      this.elements.gameOverTitle.textContent = "Resignation";
-      this.elements.gameOverText.textContent = `${this.colorName(this.engine.winner)} wins by resignation.`;
-      return;
-    }
-    if (this.engine.gameState === STATE.STALEMATE) {
-      this.elements.gameOverTitle.textContent = "Stalemate";
-      this.elements.gameOverText.textContent = "No legal moves remain. It's a draw.";
-      return;
-    }
-    if (this.engine.gameState === STATE.DRAW) {
-      this.elements.gameOverTitle.textContent = "Draw";
-      this.elements.gameOverText.textContent = this.engine.drawReason || "Draw by rule.";
-      return;
-    }
-    this.elements.gameOverTitle.textContent = "Timeout";
-    this.elements.gameOverText.textContent = `${this.colorName(this.engine.winner)} wins on time.`;
+    // Populate legacy labels (used by screen-readers / fallback)
+    const legacyTexts = {
+      [STATE.CHECKMATE]: [`Checkmate`, `${this.colorName(this.engine.winner)} wins the game.`],
+      [STATE.RESIGN]:    [`Resignation`, `${this.colorName(this.engine.winner)} wins by resignation.`],
+      [STATE.STALEMATE]: [`Stalemate`, `No legal moves remain. It's a draw.`],
+      [STATE.DRAW]:      [`Draw`, this.engine.drawReason || "Draw by rule."],
+      [STATE.TIMEOUT]:   [`Timeout`, `${this.colorName(this.engine.winner)} wins on time.`],
+    };
+    const [legacyTitle, legacyText] = legacyTexts[this.engine.gameState] ?? ["Game Over", ""];
+    this.elements.gameOverTitle.textContent = legacyTitle;
+    this.elements.gameOverText.textContent  = legacyText;
+
+    // Show the rich overlay only once per game-over event
+    if (this._victoryShown) return;
+    this._victoryShown = true;
+
+    const meta  = chessResultMeta(this.engine.gameState, this.engine.winner);
+    const moves = Math.ceil(this.engine.moveHistory.length / 2);
+    const caps  = this.matchStats.captures.white + this.matchStats.captures.black;
+    const checks = this.matchStats.checksGiven.white + this.matchStats.checksGiven.black;
+
+    showChessVictory({
+      ...meta,
+      stats: [
+        { value: moves,  label: "Moves"    },
+        { value: caps,   label: "Captures" },
+        { value: checks, label: "Checks"   },
+      ],
+      onPlayAgain: () => this.resetGame(),
+      onAnalyze:   () => {
+        const tabBtn = document.querySelector('[data-tab-target="analysis"]');
+        tabBtn?.click();
+      },
+    });
   }
 
   toggleGameOverPanel(show) {

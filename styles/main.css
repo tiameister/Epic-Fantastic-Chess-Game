@@ -80,9 +80,9 @@ body {
   font-family: "Inter", "Segoe UI", "Roboto", system-ui, sans-serif;
   color: var(--text);
   background:
-    radial-gradient(850px 520px at 5% 0%, rgba(56, 189, 248, 0.1), rgba(56, 189, 248, 0) 55%),
-    radial-gradient(920px 700px at 100% 100%, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0) 55%),
-    linear-gradient(160deg, #090f1d, #101827 58%, #131d31);
+    linear-gradient(165deg, rgba(7, 11, 20, 0.86), rgba(9, 15, 28, 0.8) 50%, rgba(10, 17, 30, 0.88)),
+    radial-gradient(780px 520px at 8% 0%, rgba(56, 189, 248, 0.08), rgba(56, 189, 248, 0) 55%),
+    url("./../images/background.jpeg") center / cover no-repeat fixed;
   display: grid;
   place-items: center;
   padding: 24px;
@@ -1332,6 +1332,411 @@ body.layout-training .training-panel {
   100% {
     opacity: 0.1;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GAME FEEL — Animations & Overlays
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Piece Lerp Ghost ─────────────────────────────────────── */
+.anim-ghost-piece {
+  position: absolute;
+  pointer-events: none;
+  z-index: 200;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  font-size: clamp(1.9rem, 5vw, 3.2rem);
+  line-height: 1;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 6px 12px rgba(0,0,0,0.55));
+}
+
+/* ── Match-Start Splash ───────────────────────────────────── */
+.game-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 6, 23, 0.92);
+  animation: splash-fade-in 320ms ease forwards;
+  pointer-events: none;
+}
+
+.game-splash.leaving {
+  animation: splash-fade-out 480ms ease forwards;
+}
+
+.splash-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.splash-title {
+  font-family: "Cinzel", "Playfair Display", "Garamond", serif;
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: 2px;
+  animation: splash-text-rise 500ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
+}
+
+.splash-sub {
+  font-size: 0.95rem;
+  color: var(--muted);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  animation: splash-text-rise 500ms cubic-bezier(0.22, 1, 0.36, 1) 180ms both;
+}
+
+.splash-line {
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #60a5fa, transparent);
+  animation: splash-text-rise 500ms cubic-bezier(0.22, 1, 0.36, 1) 260ms both;
+}
+
+@keyframes splash-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes splash-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes splash-text-rise {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+/* ── Chess Check & Event Toast ────────────────────────────── */
+.chess-toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100%);
+  z-index: 300;
+  padding: 10px 22px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+  white-space: nowrap;
+  opacity: 0;
+  transition: none;
+}
+
+.chess-toast.check {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.92), rgba(185, 28, 28, 0.92));
+  border: 1px solid rgba(252, 165, 165, 0.6);
+  color: #fff;
+}
+
+.chess-toast.info {
+  background: linear-gradient(135deg, rgba(30, 64, 175, 0.92), rgba(37, 99, 235, 0.85));
+  border: 1px solid rgba(147, 197, 253, 0.5);
+  color: #fff;
+}
+
+.chess-toast.warn {
+  background: linear-gradient(135deg, rgba(161, 98, 7, 0.92), rgba(180, 83, 9, 0.88));
+  border: 1px solid rgba(253, 186, 116, 0.55);
+  color: #fff;
+}
+
+.chess-toast.visible {
+  animation: chess-toast-pop 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes chess-toast-pop {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-120%); }
+  12%  { opacity: 1; transform: translateX(-50%) translateY(0);      }
+  80%  { opacity: 1; transform: translateX(-50%) translateY(0);      }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-80%);   }
+}
+
+/* ── Rich Victory Modal ───────────────────────────────────── */
+.victory-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 450;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 6, 23, 0.78);
+  animation: victory-bg-in 400ms ease forwards;
+}
+
+.victory-overlay.hidden {
+  display: none;
+}
+
+.victory-card {
+  width: min(480px, 92vw);
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  background: rgba(10, 14, 28, 0.97);
+  animation: victory-card-in 480ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  position: relative;
+}
+
+.victory-header {
+  padding: 28px 28px 18px;
+  text-align: center;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.victory-icon {
+  font-size: 2.8rem;
+  line-height: 1;
+  margin-bottom: 10px;
+  animation: icon-drop 600ms cubic-bezier(0.34, 1.56, 0.64, 1) 200ms both;
+}
+
+.victory-title {
+  margin: 0 0 6px;
+  font-family: "Cinzel", "Playfair Display", serif;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  letter-spacing: 1px;
+  color: #f8fafc;
+}
+
+.victory-title.checkmate  { color: #fbbf24; }
+.victory-title.draw       { color: #94a3b8; }
+.victory-title.resign     { color: #f87171; }
+.victory-title.stalemate  { color: #a78bfa; }
+
+.victory-subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.victory-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.victory-stat {
+  padding: 16px 12px;
+  text-align: center;
+  background: rgba(10, 14, 28, 0.97);
+  animation: stat-count-in 300ms ease both;
+}
+
+.victory-stat-value {
+  display: block;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  line-height: 1;
+}
+
+.victory-stat-label {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-top: 5px;
+}
+
+.victory-actions {
+  padding: 16px 22px 22px;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.victory-btn-primary {
+  flex: 1;
+  max-width: 180px;
+  padding: 12px 20px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border-radius: 12px;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  background: linear-gradient(135deg, rgba(180, 130, 20, 0.85), rgba(120, 80, 10, 0.85));
+  color: #fff8e1;
+  cursor: pointer;
+  transition: filter 140ms;
+}
+
+.victory-btn-primary:hover { filter: brightness(1.12); }
+
+.victory-btn-secondary {
+  flex: 1;
+  max-width: 180px;
+  padding: 12px 20px;
+  font-size: 0.9rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(30, 41, 59, 0.7);
+  color: var(--muted);
+  cursor: pointer;
+  transition: filter 140ms;
+}
+
+.victory-btn-secondary:hover { filter: brightness(1.1); }
+
+/* Confetti-style accent shimmer on checkmate win */
+.victory-card.win-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 40%,
+    rgba(251, 191, 36, 0.06) 50%,
+    transparent 60%
+  );
+  animation: card-shimmer 2.5s ease infinite;
+  pointer-events: none;
+}
+
+@keyframes victory-bg-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes victory-card-in {
+  from { opacity: 0; transform: scale(0.84) translateY(24px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
+@keyframes icon-drop {
+  from { opacity: 0; transform: scale(0.4) translateY(-30px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0);     }
+}
+
+@keyframes stat-count-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes card-shimmer {
+  0%   { background-position-x: -200%; }
+  100% { background-position-x:  200%; }
+}
+
+/* ── 3D Backgammon Dice ───────────────────────────────────── */
+.die-3d-scene {
+  width: 52px;
+  height: 52px;
+  perspective: 220px;
+  flex-shrink: 0;
+}
+
+.die-3d-cube {
+  width: 52px;
+  height: 52px;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(0deg) rotateY(0deg);
+  will-change: transform;
+}
+
+.die-face {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  border: 1px solid rgba(236, 209, 175, 0.65);
+  background: radial-gradient(circle at 30% 25%, #fff8ea 0 30%, #e6d4b6 72%, #c7ad84 100%);
+  box-shadow: inset 0 2px 4px rgba(255,255,255,0.5), 0 5px 10px rgba(25, 15, 8, 0.4);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.face-front  { transform: rotateY(0deg)   translateZ(26px); }
+.face-back   { transform: rotateY(180deg) translateZ(26px); }
+.face-right  { transform: rotateY(90deg)  translateZ(26px); }
+.face-left   { transform: rotateY(-90deg) translateZ(26px); }
+.face-top    { transform: rotateX(90deg)  translateZ(26px); }
+.face-bottom { transform: rotateX(-90deg) translateZ(26px); }
+
+.die-pip-grid {
+  width: 86%;
+  height: 86%;
+  margin: 7%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  place-items: center;
+}
+
+.die-pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #4a2b12, #281708);
+}
+
+.die-pip.invisible { visibility: hidden; }
+
+/* ── Enhanced Backgammon Victory Card ────────────────────── */
+.bg-victory-card {
+  width: min(400px, 90vw);
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(236, 195, 133, 0.5);
+  background: rgba(18, 10, 6, 0.97);
+  animation: victory-card-in 480ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.bg-victory-header {
+  padding: 28px 24px 18px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(120, 80, 30, 0.55), transparent);
+  border-bottom: 1px solid rgba(224, 184, 135, 0.2);
+}
+
+.bg-victory-header h3 {
+  font-family: "Cinzel", "Playfair Display", serif;
+  font-size: 1.8rem;
+  margin: 0 0 6px;
+  color: #f6ead5;
+}
+
+.bg-victory-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: rgba(224, 184, 135, 0.12);
+}
+
+.bg-victory-stat {
+  padding: 16px;
+  text-align: center;
+  background: rgba(18, 10, 6, 0.97);
+}
+
+.bg-victory-stat strong {
+  display: block;
+  font-size: 1.5rem;
+  color: #f6ead5;
+}
+
+.bg-victory-stat span {
+  font-size: 0.72rem;
+  color: #d8c2a0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bg-victory-actions {
+  padding: 16px 20px 20px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
 }
 
 @media (max-width: 760px) {

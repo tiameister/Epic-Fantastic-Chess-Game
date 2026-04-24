@@ -1,3 +1,6 @@
+import { DiceAnimator } from "./ui/dice-animator.js";
+import { showBackgammonVictory, hideBackgammonVictory, showChessToast } from "./ui/game-feel.js";
+
 export class BackgammonUI {
   constructor(engine, elements) {
     this.engine = engine;
@@ -13,6 +16,10 @@ export class BackgammonUI {
     this.pointElements = new Map();
     this.offSlotWhite = null;
     this.offSlotBlack = null;
+
+    // 3-D dice
+    this.diceAnimator = new DiceAnimator(elements.backgammonDice);
+    this._diceCount   = 0;
   }
 
   init() {
@@ -70,7 +77,11 @@ export class BackgammonUI {
       this.render();
     });
     this.elements.backgammonCheatWhiteToggle.addEventListener("change", () => {
-      this.engine.setWhiteCheatMode(this.elements.backgammonCheatWhiteToggle.checked);
+      const on = this.elements.backgammonCheatWhiteToggle.checked;
+      this.engine.setWhiteCheatMode(on);
+      if (on) {
+        showChessToast("⚠️ White cheat mode activated — loaded dice!", "warn");
+      }
       this.render();
     });
     this.elements.backgammonLangToggle.addEventListener("change", () => {
@@ -454,57 +465,45 @@ export class BackgammonUI {
   }
 
   renderDice() {
-    const holder = this.elements.backgammonDice;
-    holder.innerHTML = "";
-    const values = this.engine.dice.length > 0 ? this.engine.dice : [0, 0];
-    values.forEach((value) => {
-      const die = document.createElement("div");
-      die.className = "bg-die";
-      this.renderDiePips(die, value);
-      holder.appendChild(die);
-    });
-  }
-
-  renderDiePips(node, value) {
-    if (!value) {
-      node.textContent = "-";
-      return;
+    const values = this.engine.dice.length > 0 ? this.engine.dice : [1, 1];
+    const count  = values.length;
+    if (this._diceCount !== count) {
+      this.diceAnimator.build(count);
+      this._diceCount = count;
     }
-    const patterns = {
-      1: [5],
-      2: [1, 9],
-      3: [1, 5, 9],
-      4: [1, 3, 7, 9],
-      5: [1, 3, 5, 7, 9],
-      6: [1, 3, 4, 6, 7, 9]
-    };
-    node.innerHTML = "";
-    const grid = document.createElement("div");
-    grid.className = "bg-die-grid";
-    for (let i = 1; i <= 9; i += 1) {
-      const pip = document.createElement("span");
-      pip.className = "bg-pip";
-      pip.style.opacity = patterns[value].includes(i) ? "1" : "0";
-      grid.appendChild(pip);
+    this.diceAnimator.showRolled(values);
+    // Dim dice when no roll has happened yet
+    if (!this.engine.dice.length) {
+      this.diceAnimator.markUsed([0, 1]);
+    } else {
+      this.diceAnimator.markUsed([]);
     }
-    node.appendChild(grid);
   }
 
-  animateDice() {
-    const holder = this.elements.backgammonDice;
-    holder.classList.remove("rolling");
-    void holder.offsetWidth;
-    holder.classList.add("rolling");
-    window.setTimeout(() => holder.classList.remove("rolling"), 620);
-  }
-
-  rollDiceFromUI() {
+  async rollDiceFromUI() {
     const roll = this.engine.rollDice();
     if (!roll) return;
     this.selectedFrom = null;
     this.playDiceSfx();
-    this.animateDice();
-    this.render();
+
+    const values = this.engine.dice;
+    if (this._diceCount !== values.length) {
+      this.diceAnimator.build(values.length);
+      this._diceCount = values.length;
+    }
+
+    // Update every part of the UI immediately EXCEPT the dice (handled by animator)
+    this.renderBoard();
+    this.renderStatus();
+    this.renderMeta();
+    this.updateDoubleButtons();
+    this.updateActionStates();
+    this.updateBoardTurnCue();
+
+    // Tumble and land — then reveal hints and callout
+    await this.diceAnimator.roll(values);
+    this.renderLegalHints();
+    this.updateCallout();
   }
 
   updateDoubleButtons() {
@@ -616,20 +615,48 @@ export class BackgammonUI {
   }
 
   showGameOverModal() {
-    if (!this.elements.backgammonGameOverModal || !this.engine.winner) return;
-    const t = this.translate();
-    this.elements.backgammonGameOverTitle.textContent = this.language === "tr" ? "Oyun Bitti" : "Game Over";
-    this.elements.backgammonGameOverText.textContent = `${this.colorName(this.engine.winner)} ${t.winsGame} (+${this.engine.lastWinPoints})`;
+    if (!this.engine.winner) return;
+    const t      = this.translate();
+    const winner = this.colorName(this.engine.winner);
+    const pts    = this.engine.lastWinPoints ?? 0;
     const flavor = this.getVictoryFlavor();
+    const { white: ws, black: bs } = this.engine.matchScore ?? { white: 0, black: 0 };
+    const target = this.engine.targetScore ?? 7;
+
+    // Keep legacy DOM labels for screen-readers / fallback
+    if (this.elements.backgammonGameOverTitle) {
+      this.elements.backgammonGameOverTitle.textContent = this.language === "tr" ? "Oyun Bitti" : "Round Over";
+    }
+    if (this.elements.backgammonGameOverText) {
+      this.elements.backgammonGameOverText.textContent = `${winner} ${t.winsGame} (+${pts})`;
+    }
     if (this.elements.backgammonGameOverFlavor) {
       this.elements.backgammonGameOverFlavor.textContent = flavor;
     }
-    this.elements.backgammonGameOverModal.classList.remove("hidden");
+
+    showBackgammonVictory({
+      title: this.language === "tr" ? "Oyun Bitti" : "Round Over",
+      flavor,
+      stats: [
+        { value: winner,           label: "Winner"      },
+        { value: `+${pts}`,        label: "Points Won"  },
+        { value: `${ws} – ${bs}`,  label: "Match Score" },
+        { value: `${target}`,      label: "Target"      },
+      ],
+      onNextRound: () => {
+        this.engine.startNextGame();
+        this.selectedFrom = null;
+        this.lastWinAnnounced = "";
+        this.render();
+      },
+    });
   }
 
   hideGameOverModal() {
-    if (!this.elements.backgammonGameOverModal) return;
-    this.elements.backgammonGameOverModal.classList.add("hidden");
+    if (this.elements.backgammonGameOverModal) {
+      this.elements.backgammonGameOverModal.classList.add("hidden");
+    }
+    hideBackgammonVictory();
   }
 
   updateBoardTurnCue() {

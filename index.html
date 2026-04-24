@@ -229,11 +229,15 @@
         <button id="nextTrainingBtn" type="button">Next Training Position</button>
       </section>
 
+      <!-- Legacy game-over panel kept for backward compat; rich overlay is created by GameFeel -->
       <section id="gameOverPanel" class="game-over-panel hidden" aria-live="polite">
         <h2 id="gameOverTitle">Game Over</h2>
         <p id="gameOverText">Result</p>
         <button id="playAgainBtn" type="button">Play Again</button>
       </section>
+
+      <!-- Chess toast mount (GameFeel creates this dynamically; element reserved) -->
+      <div id="chessToastAnchor" aria-live="assertive" aria-atomic="true"></div>
 
       <section id="promotionModal" class="promotion-modal hidden" aria-live="polite">
         <div class="promotion-card">
@@ -288,6 +292,7 @@
       <div id="backgammonToast" class="backgammon-toast" aria-live="polite"></div>
       <section id="backgammonBoard" class="backgammon-board"></section>
       <ul id="backgammonHints" class="meta-list hidden"></ul>
+      <!-- Backgammon victory — rich overlay created by GameFeel; legacy IDs kept for fallback -->
       <section id="backgammonGameOverModal" class="promotion-modal hidden" aria-live="polite">
         <div class="promotion-card backgammon-victory-card">
           <h3 id="backgammonGameOverTitle">Game Over</h3>
