@@ -99,6 +99,19 @@ export class BackgammonUI {
     if (this.elements.backgammonAdContinueBtn) {
       this.elements.backgammonAdContinueBtn.addEventListener("click", () => this.hideAdCard());
     }
+    if (this.elements.backgammonAdCard) {
+      // Click on backdrop closes ad; clicks inside modal content do not.
+      this.elements.backgammonAdCard.addEventListener("click", (event) => {
+        if (event.target === this.elements.backgammonAdCard) {
+          this.hideAdCard();
+        }
+      });
+    }
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && this.elements.backgammonAdCard && !this.elements.backgammonAdCard.classList.contains("hidden")) {
+        this.hideAdCard();
+      }
+    });
     this.elements.backgammonDoublingToggle.addEventListener("change", () => {
       this.engine.setDoublingEnabled(this.elements.backgammonDoublingToggle.checked);
       this.render();

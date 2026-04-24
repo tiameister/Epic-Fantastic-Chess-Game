@@ -1465,6 +1465,7 @@ label {
   box-shadow:
     inset 0 0 0 1px rgba(236, 209, 175, 0.2),
     0 24px 64px rgba(0, 0, 0, 0.65);
+  overflow: auto;
 }
 
 .kiraathane-ad-head {
@@ -1519,6 +1520,7 @@ label {
   height: 100%;
   min-height: 280px;
   border: 0;
+  background: #0b0b0b;
 }
 
 .kiraathane-ad-link {
@@ -1544,6 +1546,10 @@ label {
   gap: 8px;
   justify-content: flex-end;
   align-items: center;
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(52, 28, 15, 0), rgba(52, 28, 15, 0.95) 25%);
+  padding-top: 8px;
 }
 
 .kiraathane-ad-continue {
