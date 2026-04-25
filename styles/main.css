@@ -1528,6 +1528,7 @@ label {
   min-height: 280px;
   border: 0;
   background: #0b0b0b;
+  pointer-events: none;
 }
 
 .kiraathane-ad-link {

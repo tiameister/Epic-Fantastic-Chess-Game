@@ -93,11 +93,18 @@ export class BackgammonUI {
       this.hideGameOverModal();
       this.render();
     });
+    const closeAd = (event) => {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      this.hideAdCard();
+    };
     if (this.elements.backgammonAdCloseBtn) {
-      this.elements.backgammonAdCloseBtn.addEventListener("click", () => this.hideAdCard());
+      this.elements.backgammonAdCloseBtn.addEventListener("click", closeAd);
+      this.elements.backgammonAdCloseBtn.addEventListener("pointerup", closeAd);
     }
     if (this.elements.backgammonAdContinueBtn) {
-      this.elements.backgammonAdContinueBtn.addEventListener("click", () => this.hideAdCard());
+      this.elements.backgammonAdContinueBtn.addEventListener("click", closeAd);
+      this.elements.backgammonAdContinueBtn.addEventListener("pointerup", closeAd);
     }
     if (this.elements.backgammonAdCard) {
       // Click on backdrop closes ad; clicks inside modal content do not.
