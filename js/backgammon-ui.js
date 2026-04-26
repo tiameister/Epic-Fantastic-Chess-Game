@@ -93,21 +93,7 @@ export class BackgammonUI {
       this.hideGameOverModal();
       this.render();
     });
-    const closeAd = (event) => {
-      event?.preventDefault?.();
-      event?.stopPropagation?.();
-      this.hideAdCard();
-    };
-    if (this.elements.backgammonAdCloseBtn) {
-      this.elements.backgammonAdCloseBtn.addEventListener("click", closeAd);
-      this.elements.backgammonAdCloseBtn.addEventListener("touchend", closeAd, { passive: false });
-      this.elements.backgammonAdCloseBtn.addEventListener("pointerup", closeAd);
-    }
-    if (this.elements.backgammonAdContinueBtn) {
-      this.elements.backgammonAdContinueBtn.addEventListener("click", closeAd);
-      this.elements.backgammonAdContinueBtn.addEventListener("touchend", closeAd, { passive: false });
-      this.elements.backgammonAdContinueBtn.addEventListener("pointerup", closeAd);
-    }
+    const closeAd = () => this.hideAdCard();
     if (this.elements.backgammonAdCard) {
       // Delegated close: backdrop OR any element marked with data-ad-close.
       this.elements.backgammonAdCard.addEventListener("click", (event) => {
@@ -115,21 +101,13 @@ export class BackgammonUI {
           ? event.target.closest("[data-ad-close='true']")
           : null;
         if (closeTarget) {
-          closeAd(event);
+          closeAd();
           return;
         }
         if (event.target === this.elements.backgammonAdCard) {
-          this.hideAdCard();
+          closeAd();
         }
       });
-      this.elements.backgammonAdCard.addEventListener("touchend", (event) => {
-        const closeTarget = event.target instanceof Element
-          ? event.target.closest("[data-ad-close='true']")
-          : null;
-        if (closeTarget) {
-          closeAd(event);
-        }
-      }, { passive: false });
     }
     window.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && this.elements.backgammonAdCard && !this.elements.backgammonAdCard.classList.contains("hidden")) {

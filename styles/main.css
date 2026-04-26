@@ -1457,6 +1457,11 @@ label {
   backdrop-filter: blur(3px);
 }
 
+/* Must override .kiraathane-ad-overlay display:grid when hidden. */
+.kiraathane-ad-overlay.hidden {
+  display: none;
+}
+
 .kiraathane-ad-modal {
   width: min(1200px, 96vw);
   height: min(92vh, 860px);
@@ -1473,6 +1478,8 @@ label {
     inset 0 0 0 1px rgba(236, 209, 175, 0.2),
     0 24px 64px rgba(0, 0, 0, 0.65);
   overflow: auto;
+  position: relative;
+  isolation: isolate;
 }
 
 .kiraathane-ad-head {
@@ -1480,6 +1487,8 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  position: relative;
+  z-index: 4;
 }
 
 .kiraathane-ad-badge {
@@ -1520,6 +1529,9 @@ label {
   border: 1px solid rgba(236, 209, 175, 0.35);
   background: rgba(18, 9, 4, 0.45);
   min-height: 280px;
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
 }
 
 .kiraathane-ad-preview {
@@ -1556,6 +1568,7 @@ label {
   align-items: center;
   position: sticky;
   bottom: 0;
+  z-index: 4;
   background: linear-gradient(180deg, rgba(52, 28, 15, 0), rgba(52, 28, 15, 0.95) 25%);
   padding-top: 8px;
 }
