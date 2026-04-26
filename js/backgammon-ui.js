@@ -94,11 +94,21 @@ export class BackgammonUI {
       this.render();
     });
     const closeAd = () => this.hideAdCard();
+    if (this.elements.backgammonAdCloseBtn) {
+      this.elements.backgammonAdCloseBtn.addEventListener("click", closeAd);
+    }
+    if (this.elements.backgammonAdContinueBtn) {
+      this.elements.backgammonAdContinueBtn.addEventListener("click", closeAd);
+    }
     if (this.elements.backgammonAdCard) {
       // Delegated close: backdrop OR any element marked with data-ad-close.
       this.elements.backgammonAdCard.addEventListener("click", (event) => {
-        const closeTarget = event.target instanceof Element
-          ? event.target.closest("[data-ad-close='true']")
+        const eventTarget = event.target;
+        const targetElement = eventTarget instanceof Element
+          ? eventTarget
+          : eventTarget?.parentElement ?? null;
+        const closeTarget = targetElement
+          ? targetElement.closest("[data-ad-close='true']")
           : null;
         if (closeTarget) {
           closeAd();
